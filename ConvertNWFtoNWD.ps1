@@ -20,3 +20,19 @@ Start-Sleep -Seconds 5
 Copy-Item -Path $nwfFile -Destination $nwdFile
 
 Write-Host "NWD generated: $nwdFile"
+
+#This runs the iso tracker model
+
+$year = (Get-Date).ToString("yyyy")
+$month = (Get-Date).ToString("MM")
+$day = (Get-Date).ToString("dd")
+
+$exePath = "C:\Program Files\Autodesk\Navisworks Manage 2024\Roamer.exe"
+$inputpath = "S:\Projects\23239_Strata_Ross_CCP_Phs_II_Exp\CAD\Piping\Models\_DesignReview\23239-Isometric_Status.nwf"
+$appearancepath = "S:\Projects\23239_Strata_Ross_CCP_Phs_II_Exp\CAD\Piping\Models\_DesignReview\IsoTrackerColors.dat"
+$outputPath = "S:\Projects\23239_Strata_Ross_CCP_Phs_II_Exp\CAD\Piping\Models\_DesignReview\ARCHIVE\23239-Isometric_Status_" + $year + "_" + $month + "_" + $day + ".nwd"
+
+$myvar = "-OpenFile " + $inputpath + " -NoGui -ExecuteAddInPlugin" + " AutoAppearanceLoader.Navisworks " + $appearancepath + " -SaveFile " + $outputPath
+
+start-process -filepath $exepath -Argumentlist $myvar
+
