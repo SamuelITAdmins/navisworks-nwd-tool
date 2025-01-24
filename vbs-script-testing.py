@@ -13,8 +13,8 @@ def run_vbs(script_path):
     except subprocess.CalledProcessError as e:
         print(f"Execution failed: {e}")
 
-# Example Usage for Project 12345
-project_id = "12345"
+# Example Usage for Project 24317
+project_id = "24317"
 base_vbs_path = "S:\\CAD_Standards\\_SE_Custom\\Piping\\Programming\\SE Piping Utilities\\Navisworks"
 
 # Run the NWF loader script
