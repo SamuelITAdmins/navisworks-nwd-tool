@@ -1,6 +1,6 @@
 param (
-    [string]$nwfFile
-    [string]$nwdFile
+    [string]$nwfPath,
+    [string]$nwdPath
 )
 
 # Ensure Navisworks is installed
@@ -11,14 +11,14 @@ if (-Not (Test-Path $navisworksPath)) {
     Write-Host "Error during Conversion: Navisworks is not installed!"
     exit 1
 }
-if (-Not (Test-Path $nwfFile)) {
+if (-Not (Test-Path $nwfPath)) {
     Write-Host "Error during Conversion: NWF file not found!"
     exit 1
 }
 
-$arguments = "-OpenFile " + $nwfFile + " -NoGui -SaveFile " + $nwdFile + " -Exit"
+$arguments = "-OpenFile " + $nwfPath + " -NoGui -SaveFile " + $nwdPath + " -Exit"
 
 # convert to nwd and save
 Start-Process -filepath $navisworksPath -Argumentlist $arguments
 
-Write-Host "NWD generated: $nwdFile"
+Write-Host "NWD generated: $nwdPath"

@@ -1,5 +1,5 @@
 param (
-    [string]$sourcePath
+    [string]$sourcePath,
     [string]$destinationPath
 )
 
@@ -40,9 +40,8 @@ if (Test-Path $destinationPath) {
   Copy-Item -Path $sourcePath -Destination $destinationPath
 }
 
-$arguments = "-OpenFile " + $destinationPath
+# open the copied navisworks file
+$arguments = "-OpenFile " + $destinationPath + " -ShowGui"
+Start-Process -filepath $navisworksAppPath -Argumentlist $arguments
 
-# convert to nwd and save
-Start-Process -filepath $navisworksPath -Argumentlist $arguments
-
-Write-Host "Made Destination Filed and Opened it"
+Write-Host "Made Destination File and Opened it"
