@@ -7,11 +7,12 @@ import subprocess
 # nwd file = "\\stor-dn-01\projects\Projects\24317_Electra_CO_EPCM\CAD\Piping\Models\_DesignReview\24317-DO_NOT_OPEN.nwd"
 
 # Paths (Modify as needed)
-PROJECTS_DIR = r"\\stor-dn-01\projects\Projects\24317_Electra_CO_EPCM"  # Directory containing project
+PROJECTS_DIR = r"S:\Projects"  # Directory containing all projects
+NAVISWORKS_TEMP_DIR = r"C:\Navisworks" # Directory containing copied Navisworks files
 NWF_EXT = ".nwf"
 NWD_EXT = ".nwd"
-POWERSHELL_SCRIPT = "ConvertNWFtoNWD.ps1"
-VBSCRIPT = "OpenFile.vbs"
+CONVERT_PS_SCRIPT = "C:\\Users\\sapozder\\Sandbox\\navisworks-nwd-tool\\ConvertNWFtoNWD.ps1"
+OPEN_PS_SCRIPT = "C:\\Users\\sapozder\\Sandbox\\navisworks-nwd-tool\\OpenNWFile.ps1"
 
 class NWGUI:
     def __init__(self, root):
@@ -22,8 +23,9 @@ class NWGUI:
         ttk.Label(root, text="Select Project:").grid(row=0, column=0, padx=5, pady=5)
 
         # Dropdown for Projects
-        self.project_var = tk.StringVar()
-        self.project_dropdown = ttk.Combobox(root, textvariable=self.project_var, state="readonly")
+        self.project_num = ''
+        self.project_name = tk.StringVar()
+        self.project_dropdown = ttk.Combobox(root, textvariable=self.project_name, state="readonly")
         self.project_dropdown.grid(row=0, column=1, padx=5, pady=5)
         self.load_projects()
 
@@ -31,25 +33,27 @@ class NWGUI:
         ttk.Button(root, text="Generate NWD", command=self.generate_nwd).grid(row=1, column=0, padx=5, pady=5)
         ttk.Button(root, text="Open NWD", command=self.open_nwd).grid(row=1, column=1, padx=5, pady=5)
         ttk.Button(root, text="Open NWF", command=self.open_nwf).grid(row=2, column=0, padx=5, pady=5)
-        ttk.Button(root, text="Add Project", command=self.create_project).grid(row=2, column=1, padx=5, pady=5)
+        # ttk.Button(root, text="Add Project", command=self.create_project).grid(row=2, column=1, padx=5, pady=5)
         ttk.Button(root, text="Refresh", command=self.load_projects).grid(row=3, column=0, padx=5, pady=5)
 
     def load_projects(self):
         """Load project numbers from the directory."""
         if not os.path.exists(PROJECTS_DIR):
-            os.makedirs(PROJECTS_DIR)
+            messagebox.showerror("Error", "App: Project Directory not found.")
 
         projects = [d for d in os.listdir(PROJECTS_DIR) if os.path.isdir(os.path.join(PROJECTS_DIR, d))]
         self.project_dropdown["values"] = projects
         if projects:
-            self.project_var.set(projects[0])
+            self.project_name.set(projects[0])
+            self.project_num = (projects[0].split('_', 1)[0].split(' ', 1)[0])
 
     def get_selected_project(self):
         """Returns the selected project path or None if none selected."""
-        project = self.project_var.get()
+        project = self.project_name.get()
         if not project:
             messagebox.showerror("Error", "App: No project selected.")
             return None
+        self.project_num = (project.split('_', 1)[0].split(' ', 1)[0])
         return os.path.join(PROJECTS_DIR, project)
 
     def generate_nwd(self):
@@ -58,29 +62,32 @@ class NWGUI:
         if not project_path:
             return
 
-        nwf_file = os.path.join(project_path, f"{os.path.basename(project_path)} + \CAD\Piping\Models\_DesignReview\24317-OverallModel + {NWF_EXT}")
-        nwd_file = os.path.join(project_path, f"{os.path.basename(project_path)} + \CAD\Piping\Models\_DesignReview\24317-DO_NOT_OPEN + {NWD_EXT}")
+        nwf_file = f"{project_path}\CAD\Piping\Models\_DesignReview\{self.project_num}-OverallModel{NWF_EXT}"
+        nwd_file = f"{project_path}\CAD\Piping\Models\_DesignReview\{self.project_num}-DO_NOT_OPEN{NWD_EXT}"
 
         if not os.path.exists(nwf_file):
             messagebox.showerror("Error", f"App: NWF file not found: {nwf_file}")
             return
 
         try:
-            subprocess.run(["powershell", "-File", POWERSHELL_SCRIPT, nwf_file, nwd_file], check=True)
+            command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", CONVERT_PS_SCRIPT, nwf_file, nwd_file]
+            subprocess.run(command, check=True)
             messagebox.showinfo("Success", f"App generated NWD: {nwd_file}")
         except subprocess.CalledProcessError as e:
             messagebox.showerror("Error", f"App failed to generate NWD: {e}")
 
-    def open_file(self, file_path, dest_path):
-        """Open a file using VBScript."""
-        if not os.path.exists(file_path):
-            messagebox.showerror("Error", f"App: File not found: {file_path}")
+    def open_file(self, source_path, dest_path):
+        """Open a file using PowerShell."""
+        if not os.path.exists(source_path):
+            messagebox.showerror("Error", f"App: File not found: {source_path}")
             return
 
         try:
-            subprocess.run(["wscript", VBSCRIPT, file_path, dest_path], check=True)
+            command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", OPEN_PS_SCRIPT, source_path, dest_path]
+            subprocess.run(command, check=True)
+            messagebox.showinfo("Success", f"App copied from {source_path} to {dest_path}")
         except subprocess.CalledProcessError as e:
-            messagebox.showerror("Error", f"App: Failed to open file: {e}")
+            messagebox.showerror("Error", f"App failed to open {source_path}: {e}")
 
     def open_nwd(self):
         """Open the NWD file."""
@@ -88,8 +95,9 @@ class NWGUI:
         if not project_path:
             return
 
-        nwd_file = os.path.join(project_path, f"{os.path.basename(project_path)}{NWD_EXT}")
-        self.open_file(nwd_file)
+        nwd_file = f"{project_path}\CAD\Piping\Models\_DesignReview\{self.project_num}-DO_NOT_OPEN{NWD_EXT}"
+        dest_file = f"C:\\Navisworks\\{self.project_num}-OverallModel{NWD_EXT}"
+        self.open_file(nwd_file, dest_file)
 
     def open_nwf(self):
         """Open the NWF file."""
@@ -97,9 +105,11 @@ class NWGUI:
         if not project_path:
             return
 
-        nwf_file = os.path.join(project_path, f"{os.path.basename(project_path)}{NWF_EXT}")
-        self.open_file(nwf_file)
+        nwf_file = f"{project_path}\CAD\Piping\Models\_DesignReview\{self.project_num}-OverallModel{NWF_EXT}"
+        dest_file = f"C:\\Navisworks\\{self.project_num}-OverallModel{NWF_EXT}"
+        self.open_file(nwf_file, dest_file)
 
+    '''
     def create_project(self):
         """Create a new project folder."""
         new_project = simpledialog.askstring("New Project", "Enter project number:")
@@ -119,6 +129,7 @@ class NWGUI:
 
         messagebox.showinfo("Success", f"Project created: {new_project}")
         self.load_projects()
+    '''
 
 if __name__ == "__main__":
     root = tk.Tk()
