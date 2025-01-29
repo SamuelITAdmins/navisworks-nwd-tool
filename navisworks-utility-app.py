@@ -1,4 +1,5 @@
 import os
+import re
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 import subprocess
@@ -35,17 +36,30 @@ class NWGUI:
         ttk.Button(root, text="Open NWF", command=self.open_nwf).grid(row=2, column=0, padx=5, pady=5)
         # ttk.Button(root, text="Add Project", command=self.create_project).grid(row=2, column=1, padx=5, pady=5)
         ttk.Button(root, text="Refresh", command=self.load_projects).grid(row=3, column=0, padx=5, pady=5)
+    
+    def extract_project_num(project_name):
+        """Extract the project number from the full project name, discard if the project name does not start with numbers"""
+        prefix = re.split(r'[_ ]', project_name, 1)[0]
+        return prefix if re.match(r'^\d[\d-]*$', prefix) else None
 
     def load_projects(self):
         """Load project numbers from the directory."""
         if not os.path.exists(PROJECTS_DIR):
             messagebox.showerror("Error", "App: Project Directory not found.")
+            return
 
-        projects = [d for d in os.listdir(PROJECTS_DIR) if os.path.isdir(os.path.join(PROJECTS_DIR, d))]
-        self.project_dropdown["values"] = projects
-        if projects:
-            self.project_name.set(projects[0])
-            self.project_num = (projects[0].split('_', 1)[0].split(' ', 1)[0])
+        valid_projects = [
+            (d, prefix) for d in os.listdir(PROJECTS_DIR) 
+            if os.path.isdir(os.path.join(PROJECTS_DIR, d)) and (prefix := self.extract_project_num(d))
+        ]
+        # sort project names based off of the project number
+        valid_projects.sort(key=lambda x: x[1])
+
+        if valid_projects:
+            sorted_project_names = [p[0] for p in valid_projects]
+            self.project_dropdown["values"] = sorted_project_names
+            self.project_name.set(sorted_project_names[0])
+            self.project_num = ([p[1] for p in valid_projects][0])
 
     def get_selected_project(self):
         """Returns the selected project path or None if none selected."""
@@ -53,7 +67,7 @@ class NWGUI:
         if not project:
             messagebox.showerror("Error", "App: No project selected.")
             return None
-        self.project_num = (project.split('_', 1)[0].split(' ', 1)[0])
+        self.project_num = (self.extract_project_num(project))
         return os.path.join(PROJECTS_DIR, project)
 
     def generate_nwd(self):
