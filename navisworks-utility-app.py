@@ -12,8 +12,8 @@ PROJECTS_DIR = r"S:\Projects"  # Directory containing all projects
 NAVISWORKS_TEMP_DIR = r"C:\Navisworks" # Directory containing copied Navisworks files
 NWF_EXT = ".nwf"
 NWD_EXT = ".nwd"
-CONVERT_PS_SCRIPT = "C:\\Users\\sapozder\\Sandbox\\navisworks-nwd-tool\\ConvertNWFtoNWD.ps1"
-OPEN_PS_SCRIPT = "C:\\Users\\sapozder\\Sandbox\\navisworks-nwd-tool\\OpenNWFile.ps1"
+CONVERT_PS_SCRIPT = r"C:\\Users\\sapozder\\Sandbox\\navisworks-nwd-tool\\ConvertNWFtoNWD.ps1"
+OPEN_PS_SCRIPT = r"C:\\Users\\sapozder\\Sandbox\\navisworks-nwd-tool\\OpenNWFile.ps1"
 
 class NWGUI:
     def __init__(self, root):
@@ -26,18 +26,18 @@ class NWGUI:
         # Dropdown for Projects
         self.project_num = ''
         self.project_name = tk.StringVar()
-        self.project_dropdown = ttk.Combobox(root, textvariable=self.project_name, state="readonly")
-        self.project_dropdown.grid(row=0, column=1, padx=5, pady=5)
+        self.project_dropdown = ttk.Combobox(root, textvariable=self.project_name, width=40, state="readonly")
+        self.project_dropdown.grid(row=1, column=0, columnspan=3, padx=5, pady=5)
         self.load_projects()
 
         # Buttons
-        ttk.Button(root, text="Generate NWD", command=self.generate_nwd).grid(row=1, column=0, padx=5, pady=5)
-        ttk.Button(root, text="Open NWD", command=self.open_nwd).grid(row=1, column=1, padx=5, pady=5)
-        ttk.Button(root, text="Open NWF", command=self.open_nwf).grid(row=2, column=0, padx=5, pady=5)
-        # ttk.Button(root, text="Add Project", command=self.create_project).grid(row=2, column=1, padx=5, pady=5)
-        ttk.Button(root, text="Refresh", command=self.load_projects).grid(row=3, column=0, padx=5, pady=5)
+        ttk.Button(root, text="Generate NWD", command=self.generate_nwd).grid(row=2, column=0, padx=5, pady=5)
+        ttk.Button(root, text="Open NWD", command=self.open_nwd).grid(row=2, column=1, padx=5, pady=5)
+        ttk.Button(root, text="Open NWF", command=self.open_nwf).grid(row=2, column=2, padx=5, pady=5)
+        # ttk.Button(root, text="Add Project", command=self.create_project).grid(row=3, column=1, padx=5, pady=5)
+        ttk.Button(root, text="Refresh List", command=self.load_projects).grid(row=3, column=0, padx=5, pady=5)
     
-    def extract_project_num(project_name):
+    def extract_project_num(self, project_name):
         """Extract the project number from the full project name, discard if the project name does not start with numbers"""
         prefix = re.split(r'[_ ]', project_name, 1)[0]
         return prefix if re.match(r'^\d[\d-]*$', prefix) else None
@@ -48,10 +48,13 @@ class NWGUI:
             messagebox.showerror("Error", "App: Project Directory not found.")
             return
 
-        valid_projects = [
-            (d, prefix) for d in os.listdir(PROJECTS_DIR) 
-            if os.path.isdir(os.path.join(PROJECTS_DIR, d)) and (prefix := self.extract_project_num(d))
-        ]
+        valid_projects = []
+        for d in os.listdir(PROJECTS_DIR):
+            if os.path.isdir(os.path.join(PROJECTS_DIR, d)):
+                prefix = self.extract_project_num(d)
+                if prefix:
+                    valid_projects.append((d, prefix))
+
         # sort project names based off of the project number
         valid_projects.sort(key=lambda x: x[1])
 
@@ -67,7 +70,11 @@ class NWGUI:
         if not project:
             messagebox.showerror("Error", "App: No project selected.")
             return None
-        self.project_num = (self.extract_project_num(project))
+        
+        self.project_num = self.extract_project_num(project)
+        if not self.project_num:
+            messagebox.showerror("Error", "App: Invalid project number structure.")
+
         return os.path.join(PROJECTS_DIR, project)
 
     def generate_nwd(self):
@@ -76,8 +83,8 @@ class NWGUI:
         if not project_path:
             return
 
-        nwf_file = f"{project_path}\CAD\Piping\Models\_DesignReview\{self.project_num}-OverallModel{NWF_EXT}"
-        nwd_file = f"{project_path}\CAD\Piping\Models\_DesignReview\{self.project_num}-DO_NOT_OPEN{NWD_EXT}"
+        nwf_file = os.path.join(project_path, "CAD", "Piping", "Models", "_DesignReview", f"{self.project_num}-OverallModel{NWF_EXT}")
+        nwd_file = os.path.join(project_path, "CAD", "Piping", "Models", "_DesignReview", f"{self.project_num}-DO_NOT_OPEN{NWD_EXT}")
 
         if not os.path.exists(nwf_file):
             messagebox.showerror("Error", f"App: NWF file not found: {nwf_file}")
@@ -109,8 +116,8 @@ class NWGUI:
         if not project_path:
             return
 
-        nwd_file = f"{project_path}\CAD\Piping\Models\_DesignReview\{self.project_num}-DO_NOT_OPEN{NWD_EXT}"
-        dest_file = f"C:\\Navisworks\\{self.project_num}-OverallModel{NWD_EXT}"
+        nwd_file = os.path.join(project_path, "CAD", "Piping", "Models", "_DesignReview", f"{self.project_num}-DO_NOT_OPEN{NWD_EXT}")
+        dest_file = os.path.join("C:\\", "Navisworks", f"{self.project_num}-OverallModel{NWD_EXT}")
         self.open_file(nwd_file, dest_file)
 
     def open_nwf(self):
@@ -119,8 +126,8 @@ class NWGUI:
         if not project_path:
             return
 
-        nwf_file = f"{project_path}\CAD\Piping\Models\_DesignReview\{self.project_num}-OverallModel{NWF_EXT}"
-        dest_file = f"C:\\Navisworks\\{self.project_num}-OverallModel{NWF_EXT}"
+        nwf_file = os.path.join(project_path, "CAD", "Piping", "Models", "_DesignReview", f"{self.project_num}-OverallModel{NWF_EXT}")
+        dest_file = os.path.join("C:\\", "Navisworks", f"{self.project_num}-OverallModel{NWF_EXT}")
         self.open_file(nwf_file, dest_file)
 
     '''
