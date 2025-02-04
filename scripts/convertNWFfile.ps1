@@ -26,6 +26,7 @@ $tempFile = $nwdPath + "~"
 Write-Host "Waiting for temporary file to be removed: $tempFile"
 
 # Stall until the temporary file no longer exists
+Start-Sleep -Seconds 5
 while (Test-Path $tempFile) {
     Start-Sleep -Seconds 1
 }

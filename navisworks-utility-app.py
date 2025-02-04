@@ -39,16 +39,16 @@ class NWGUI:
         self.project_dropdown = ttk.Combobox(root, textvariable=self.project_name, width=40, state="readonly")
         self.project_dropdown.grid(row=1, column=0, columnspan=3, padx=5, pady=5)
 
-        # Loading message (hidden initially)
-        self.loading_label = ttk.Label(root, text="", font=('Segoe UI', 12))
-        self.loading_label.grid(row=4, column=0, columnspan=3, padx=5, pady=5)
-        self.load_projects()
-
         # Buttons
         ttk.Button(root, text="Generate NWD", command=self.generate_nwd).grid(row=2, column=0, padx=5, pady=5)
         ttk.Button(root, text="Open NWD", command=self.open_nwd).grid(row=2, column=1, padx=5, pady=5)
         ttk.Button(root, text="Open NWF", command=self.open_nwf).grid(row=2, column=2, padx=5, pady=5)
         ttk.Button(root, text="Refresh List", command=self.load_projects).grid(row=3, column=0, padx=5, pady=5)
+
+        # Loading message (hidden initially)
+        self.loading_label = ttk.Label(root, text="", font=('Segoe UI', 12))
+        self.loading_label.grid(row=4, column=0, columnspan=3, padx=5, pady=5)
+        self.load_projects()
     
     def extract_project_num(self, project_name):
         """Extract the project number from the full project name, discard if the project name does not start with numbers"""
@@ -57,6 +57,7 @@ class NWGUI:
 
     def load_projects(self):
         """Load project numbers from the directory with a wait message."""
+        self.disable_gui()
         self.loading_label.config(text="Loading projects, please wait...")  # Show loading message
         self.root.update_idletasks()  # Force update GUI
 
@@ -82,6 +83,7 @@ class NWGUI:
                 self.project_num = (valid_projects[0][1])
 
             self.loading_label.config(text="")  # Hide loading message after projects are loaded
+            self.enable_gui()
 
         # Run in background thread
         threading.Thread(target=background_task, daemon=True).start()
@@ -115,9 +117,9 @@ class NWGUI:
         # Disable the entire GUI until powershell script executes
         self.disable_gui()
         try:
+            messagebox.showinfo("Success", "Generating NWD please wait...")
             command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", CONVERT_PS_SCRIPT, nwf_file, nwd_file]
             subprocess.run(command, check=True, shell=True)
-            messagebox.showinfo("Success", "Generating NWD please wait...")
         except subprocess.CalledProcessError as e:
             messagebox.showerror("Error", f"Failed to generate NWD: {e}")
         finally:
@@ -133,9 +135,9 @@ class NWGUI:
         try:
             command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", OPEN_PS_SCRIPT, source_path, dest_path]
             subprocess.run(command, check=True, shell=True)
-            messagebox.showinfo("Success", f"Opened {os.path.basename(source_path)} locally as {dest_path}")
+            # messagebox.showinfo("Success", f"Opened {os.path.basename(source_path)} locally as {dest_path}")
         except subprocess.CalledProcessError as e:
-            messagebox.showerror("Error", f"Failed to open {source_path}: {e}")
+            messagebox.showerror("Error", f"Failed to open {source_path} locally as {dest_path}: {e}")
 
     def open_nwd(self):
         """Open the NWD file."""
