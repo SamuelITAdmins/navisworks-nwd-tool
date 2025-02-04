@@ -1,0 +1,4 @@
+# pyinstaller temporary files
+/build/
+/dist/
+/*.spec 
