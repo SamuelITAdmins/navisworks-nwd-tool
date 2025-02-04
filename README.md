@@ -67,7 +67,7 @@ navisworks-utility-app/
 
 ## Building the Executable
 To package the script into the executable file, use this PyInstaller command:
-   - `pyinstaller --onefile --noconsole --icon=se.ico --add-data "scripts;scripts" navisworks-utility-app.py`
+   - `pyinstaller --onefile --noconsole --icon=se.ico --add-data "se.ico;." --add-data "scripts;scripts" navisworks-utility-app.py`
 
 This will generate dist/navisworks-utility-app.exe, which can be distributed to users.
 This will need to be run whenever a critical change is made to the codebase for production.

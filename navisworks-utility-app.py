@@ -4,6 +4,7 @@ import sys
 import tkinter as tk
 from tkinter import ttk, messagebox
 import subprocess
+import threading
 
 # nwf file example: "\\stor-dn-01\projects\Projects\24317_Electra_CO_EPCM\CAD\Piping\Models\_DesignReview\24317-OverallModel.nwf"
 # nwd file example: "\\stor-dn-01\projects\Projects\24317_Electra_CO_EPCM\CAD\Piping\Models\_DesignReview\24317-DO_NOT_OPEN.nwd"
@@ -37,6 +38,10 @@ class NWGUI:
         self.project_name = tk.StringVar()
         self.project_dropdown = ttk.Combobox(root, textvariable=self.project_name, width=40, state="readonly")
         self.project_dropdown.grid(row=1, column=0, columnspan=3, padx=5, pady=5)
+
+        # Loading message (hidden initially)
+        self.loading_label = ttk.Label(root, text="", font=("Arial", 12))
+        self.loading_label.grid(row=2, column=0, columnspan=3, padx=5, pady=5)
         self.load_projects()
 
         # Buttons
@@ -72,6 +77,37 @@ class NWGUI:
             self.project_name.set(sorted_project_names[0])
             self.project_num = (valid_projects[0][1])
 
+    def load_projects(self):
+        """Load project numbers from the directory with a wait message."""
+        self.loading_label.config(text="Loading projects, please wait...")  # Show loading message
+        self.root.update_idletasks()  # Force update GUI
+
+        def background_task():
+            if not os.path.exists(PROJECTS_DIR):
+                messagebox.showerror("Error", "Project Directory not found!")
+                return
+
+            valid_projects = []
+            for d in os.listdir(PROJECTS_DIR):
+                if os.path.isdir(os.path.join(PROJECTS_DIR, d)):
+                    prefix = self.extract_project_num(d)
+                    if prefix:
+                        valid_projects.append((d, prefix))
+
+            # Sort project names based on project number (desc)
+            valid_projects.sort(key=lambda x: x[1], reverse=True)
+
+            if valid_projects:
+                sorted_project_names = [p[0] for p in valid_projects]
+                self.project_dropdown["values"] = sorted_project_names
+                self.project_name.set(sorted_project_names[0])
+                self.project_num = (valid_projects[0][1])
+
+            self.loading_label.config(text="")  # Hide loading message after projects are loaded
+
+        # Run in background thread
+        threading.Thread(target=background_task, daemon=True).start()
+
     def get_selected_project(self):
         """Returns the selected project path or None if none selected."""
         project = self.project_name.get()
@@ -97,13 +133,18 @@ class NWGUI:
         if not os.path.exists(nwf_file):
             messagebox.showerror("Error", f"NWF file not found for project: {project_path}")
             return
-
+        
+        # Disable the entire GUI until powershell script executes
+        self.root.config(state="disabled")
         try:
             command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", CONVERT_PS_SCRIPT, nwf_file, nwd_file]
             subprocess.run(command, check=True, shell=True)
-            messagebox.showinfo("Success", f"Generating NWD: {os.path.basename(nwd_file)}...")
+            messagebox.showinfo("Success", "Generating NWD please wait...")
         except subprocess.CalledProcessError as e:
             messagebox.showerror("Error", f"Failed to generate NWD: {e}")
+        finally:
+            self.root.config(state="normal")  # Re-enable the GUI after the process is finished
+            messagebox.showinfo("Success", f"Generated NWD: {os.path.basename(nwd_file)}")
 
     def open_file(self, source_path, dest_path):
         """Open a file using PowerShell."""
