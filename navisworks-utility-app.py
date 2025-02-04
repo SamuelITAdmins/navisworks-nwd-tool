@@ -115,16 +115,20 @@ class NWGUI:
             return
         
         # Disable the entire GUI until powershell script executes
-        self.disable_gui()
         try:
-            messagebox.showinfo("Success", "Generating NWD please wait...")
+            self.disable_gui()
+            self.loading_label.config(text="Generating NWD, please wait...")
+            self.root.update_idletasks()
             command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", CONVERT_PS_SCRIPT, nwf_file, nwd_file]
             subprocess.run(command, check=True, shell=True)
+            self.loading_label.config(text="")
         except subprocess.CalledProcessError as e:
             messagebox.showerror("Error", f"Failed to generate NWD: {e}")
-        finally:
-            self.enable_gui()  # Re-enable the GUI after the process is finished
-            messagebox.showinfo("Success", f"Generated NWD: {os.path.basename(nwd_file)}")
+            return
+
+        # Re-enable the GUI after the process is finished
+        self.enable_gui()
+        messagebox.showinfo("Success", f"Generated NWD for {self.project_num}")
 
     def open_file(self, source_path, dest_path):
         """Open a file using PowerShell."""
