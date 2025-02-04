@@ -28,16 +28,18 @@ This application is designed to help users generate NWD files and open NWD/NWF f
 ## Developer Guide
 
 ### Project Structure
+```
 navisworks-utility-app/ 
 │-- navisworks-utility-app.py # Main application script 
 │-- scripts/ 
-│  ├── convertNWFfile.ps1 # PowerShell script for NWD generation 
-│  ├── openNWfile.ps1 # PowerShell script for opening Navisworks files 
+│  ├── convertNWFfile.ps1     # PowerShell script for NWD generation 
+│  ├── openNWfile.ps1         # PowerShell script for opening Navisworks files 
 │-- test-scripts/ 
-│  ├── ps1-script-testing.py # python test script for testing powershell scripts
-│  ├── vbs-script-testing.py # python test script for testing vbs scripts
-│-- se.ico # Application icon 
-│-- README.md # Documentation
+│  ├── ps1-script-testing.py  # python test script for testing powershell scripts
+│  ├── vbs-script-testing.py  # python test script for testing vbs scripts
+│-- se.ico                    # Application icon 
+│-- README.md                 # Documentation
+```
 
 ### Key Components
 - `NWGUI` Class: Manages the user interface and interactions.
@@ -65,7 +67,7 @@ navisworks-utility-app/
 
 ## Building the Executable
 To package the script into the executable file, use this PyInstaller command:
-`pyinstaller --onefile --noconsole --icon=se.ico --add-data "scripts;scripts" navisworks-utility-app.py`
+   - `pyinstaller --onefile --noconsole --icon=se.ico --add-data "scripts;scripts" navisworks-utility-app.py`
 
 This will generate dist/navisworks-utility-app.exe, which can be distributed to users.
 This will need to be run whenever a critical change is made to the codebase for production.
