@@ -40,8 +40,8 @@ class NWGUI:
         self.project_dropdown.grid(row=1, column=0, columnspan=3, padx=5, pady=5)
 
         # Loading message (hidden initially)
-        self.loading_label = ttk.Label(root, text="", font=("Arial", 12))
-        self.loading_label.grid(row=2, column=0, columnspan=3, padx=5, pady=5)
+        self.loading_label = ttk.Label(root, text="", font=('Segoe UI', 12))
+        self.loading_label.grid(row=4, column=0, columnspan=3, padx=5, pady=5)
         self.load_projects()
 
         # Buttons
@@ -54,28 +54,6 @@ class NWGUI:
         """Extract the project number from the full project name, discard if the project name does not start with numbers"""
         prefix = re.split(r'[_ ]', project_name, 1)[0]
         return prefix if re.match(r'^\d[\d-]*$', prefix) else None
-
-    def load_projects(self):
-        """Load project numbers from the directory."""
-        if not os.path.exists(PROJECTS_DIR):
-            messagebox.showerror("Error", "Project Directory not found!")
-            return
-
-        valid_projects = []
-        for d in os.listdir(PROJECTS_DIR):
-            if os.path.isdir(os.path.join(PROJECTS_DIR, d)):
-                prefix = self.extract_project_num(d)
-                if prefix:
-                    valid_projects.append((d, prefix))
-
-        # sort project names based off of the project number (desc)
-        valid_projects.sort(key=lambda x: x[1], reverse=True)
-
-        if valid_projects:
-            sorted_project_names = [p[0] for p in valid_projects]
-            self.project_dropdown["values"] = sorted_project_names
-            self.project_name.set(sorted_project_names[0])
-            self.project_num = (valid_projects[0][1])
 
     def load_projects(self):
         """Load project numbers from the directory with a wait message."""
@@ -135,7 +113,7 @@ class NWGUI:
             return
         
         # Disable the entire GUI until powershell script executes
-        self.root.config(state="disabled")
+        self.root.attributes("-state", "disabled")
         try:
             command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", CONVERT_PS_SCRIPT, nwf_file, nwd_file]
             subprocess.run(command, check=True, shell=True)
@@ -143,7 +121,7 @@ class NWGUI:
         except subprocess.CalledProcessError as e:
             messagebox.showerror("Error", f"Failed to generate NWD: {e}")
         finally:
-            self.root.config(state="normal")  # Re-enable the GUI after the process is finished
+            self.root.attributes("-state", "normal")  # Re-enable the GUI after the process is finished
             messagebox.showinfo("Success", f"Generated NWD: {os.path.basename(nwd_file)}")
 
     def open_file(self, source_path, dest_path):
