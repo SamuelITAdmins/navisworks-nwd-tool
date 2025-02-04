@@ -113,7 +113,7 @@ class NWGUI:
             return
         
         # Disable the entire GUI until powershell script executes
-        self.root.attributes("-state", "disabled")
+        self.disable_gui()
         try:
             command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", CONVERT_PS_SCRIPT, nwf_file, nwd_file]
             subprocess.run(command, check=True, shell=True)
@@ -121,7 +121,7 @@ class NWGUI:
         except subprocess.CalledProcessError as e:
             messagebox.showerror("Error", f"Failed to generate NWD: {e}")
         finally:
-            self.root.attributes("-state", "normal")  # Re-enable the GUI after the process is finished
+            self.enable_gui()  # Re-enable the GUI after the process is finished
             messagebox.showinfo("Success", f"Generated NWD: {os.path.basename(nwd_file)}")
 
     def open_file(self, source_path, dest_path):
@@ -156,6 +156,16 @@ class NWGUI:
         nwf_file = os.path.join(project_path, "CAD", "Piping", "Models", "_DesignReview", f"{self.project_num}-OverallModel{NWF_EXT}")
         dest_file = os.path.join(NAVISWORKS_TEMP_DIR, f"{self.project_num}-OverallModel{NWF_EXT}")
         self.open_file(nwf_file, dest_file)
+    
+    def disable_gui(self):
+        """Disable all widgets in the root window."""
+        for widget in self.root.winfo_children():
+            widget.config(state="disabled")
+
+    def enable_gui(self):
+        """Enable all widgets in the root window."""
+        for widget in self.root.winfo_children():
+            widget.config(state="normal")
 
 if __name__ == "__main__":
     root = tk.Tk()
