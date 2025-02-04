@@ -34,7 +34,6 @@ class NWGUI:
         ttk.Button(root, text="Generate NWD", command=self.generate_nwd).grid(row=2, column=0, padx=5, pady=5)
         ttk.Button(root, text="Open NWD", command=self.open_nwd).grid(row=2, column=1, padx=5, pady=5)
         ttk.Button(root, text="Open NWF", command=self.open_nwf).grid(row=2, column=2, padx=5, pady=5)
-        # ttk.Button(root, text="Add Project", command=self.create_project).grid(row=3, column=1, padx=5, pady=5)
         ttk.Button(root, text="Refresh List", command=self.load_projects).grid(row=3, column=0, padx=5, pady=5)
     
     def extract_project_num(self, project_name):
@@ -45,7 +44,7 @@ class NWGUI:
     def load_projects(self):
         """Load project numbers from the directory."""
         if not os.path.exists(PROJECTS_DIR):
-            messagebox.showerror("Error", "App: Project Directory not found.")
+            messagebox.showerror("Error", "Project Directory not found!")
             return
 
         valid_projects = []
@@ -55,25 +54,25 @@ class NWGUI:
                 if prefix:
                     valid_projects.append((d, prefix))
 
-        # sort project names based off of the project number
-        valid_projects.sort(key=lambda x: x[1])
+        # sort project names based off of the project number (desc)
+        valid_projects.sort(key=lambda x: x[1], reverse=True)
 
         if valid_projects:
             sorted_project_names = [p[0] for p in valid_projects]
             self.project_dropdown["values"] = sorted_project_names
             self.project_name.set(sorted_project_names[0])
-            self.project_num = ([p[1] for p in valid_projects][0])
+            self.project_num = (valid_projects[0][1])
 
     def get_selected_project(self):
         """Returns the selected project path or None if none selected."""
         project = self.project_name.get()
         if not project:
-            messagebox.showerror("Error", "App: No project selected.")
+            messagebox.showerror("Error", "No project selected!")
             return None
         
         self.project_num = self.extract_project_num(project)
         if not self.project_num:
-            messagebox.showerror("Error", "App: Invalid project number structure.")
+            messagebox.showerror("Error", "Invalid project number structure!")
 
         return os.path.join(PROJECTS_DIR, project)
 
@@ -87,28 +86,28 @@ class NWGUI:
         nwd_file = os.path.join(project_path, "CAD", "Piping", "Models", "_DesignReview", f"{self.project_num}-DO_NOT_OPEN{NWD_EXT}")
 
         if not os.path.exists(nwf_file):
-            messagebox.showerror("Error", f"App: NWF file not found: {nwf_file}")
+            messagebox.showerror("Error", f"NWF file not found for project: {project_path}")
             return
 
         try:
             command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", CONVERT_PS_SCRIPT, nwf_file, nwd_file]
             subprocess.run(command, check=True)
-            messagebox.showinfo("Success", f"App generated NWD: {nwd_file}")
+            messagebox.showinfo("Success", f"Generated NWD: {os.path.basename(nwd_file)}")
         except subprocess.CalledProcessError as e:
-            messagebox.showerror("Error", f"App failed to generate NWD: {e}")
+            messagebox.showerror("Error", f"Failed to generate NWD: {e}")
 
     def open_file(self, source_path, dest_path):
         """Open a file using PowerShell."""
         if not os.path.exists(source_path):
-            messagebox.showerror("Error", f"App: File not found: {source_path}")
+            messagebox.showerror("Error", f"File not found when opening: {source_path}")
             return
 
         try:
             command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", OPEN_PS_SCRIPT, source_path, dest_path]
             subprocess.run(command, check=True)
-            messagebox.showinfo("Success", f"App copied from {source_path} to {dest_path}")
+            messagebox.showinfo("Success", f"Opened {os.path.basename(source_path)} locally as {dest_path}")
         except subprocess.CalledProcessError as e:
-            messagebox.showerror("Error", f"App failed to open {source_path}: {e}")
+            messagebox.showerror("Error", f"Failed to open {source_path}: {e}")
 
     def open_nwd(self):
         """Open the NWD file."""
@@ -129,28 +128,6 @@ class NWGUI:
         nwf_file = os.path.join(project_path, "CAD", "Piping", "Models", "_DesignReview", f"{self.project_num}-OverallModel{NWF_EXT}")
         dest_file = os.path.join("C:\\", "Navisworks", f"{self.project_num}-OverallModel{NWF_EXT}")
         self.open_file(nwf_file, dest_file)
-
-    '''
-    def create_project(self):
-        """Create a new project folder."""
-        new_project = simpledialog.askstring("New Project", "Enter project number:")
-        if not new_project:
-            return
-
-        new_project_path = os.path.join(PROJECTS_DIR, new_project)
-
-        if os.path.exists(new_project_path):
-            messagebox.showerror("Error", "Project already exists.")
-            return
-
-        os.makedirs(new_project_path)
-
-        # Creating an empty NWF file
-        open(os.path.join(new_project_path, f"{new_project}{NWF_EXT}"), "w").close()
-
-        messagebox.showinfo("Success", f"Project created: {new_project}")
-        self.load_projects()
-    '''
 
 if __name__ == "__main__":
     root = tk.Tk()

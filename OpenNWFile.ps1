@@ -16,7 +16,7 @@ if (-Not (Test-Path $navisworksAppPath)) {
     exit 1
 }
 if (-Not (Test-Path $sourcePath)) {
-    Write-Host "Error during Opening: Source File not found!"
+    Write-Host "Error during Opening: Source File not found! $sourcePath"
     exit 1
 }
 # Create the navisworks folder if it does not already exist
@@ -44,4 +44,4 @@ if (Test-Path $destinationPath) {
 $arguments = "-OpenFile " + $destinationPath + " -ShowGui"
 Start-Process -filepath $navisworksAppPath -Argumentlist $arguments
 
-Write-Host "Made Destination File and Opened it"
+Write-Host "Success: Opened $sourcePath locally as $destinationPath"

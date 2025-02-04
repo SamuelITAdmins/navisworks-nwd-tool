@@ -21,4 +21,4 @@ $arguments = "-OpenFile " + $nwfPath + " -NoGui -SaveFile " + $nwdPath + " -Exit
 # convert to nwd and save
 Start-Process -filepath $navisworksPath -Argumentlist $arguments
 
-Write-Host "NWD generated: $nwdPath"
+Write-Host "Success: NWD generated $nwdPath"
