@@ -5,8 +5,8 @@ import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 import subprocess
 
-# nwf file = "\\stor-dn-01\projects\Projects\24317_Electra_CO_EPCM\CAD\Piping\Models\_DesignReview\24317-OverallModel.nwf"
-# nwd file = "\\stor-dn-01\projects\Projects\24317_Electra_CO_EPCM\CAD\Piping\Models\_DesignReview\24317-DO_NOT_OPEN.nwd"
+# nwf file example: "\\stor-dn-01\projects\Projects\24317_Electra_CO_EPCM\CAD\Piping\Models\_DesignReview\24317-OverallModel.nwf"
+# nwd file example: "\\stor-dn-01\projects\Projects\24317_Electra_CO_EPCM\CAD\Piping\Models\_DesignReview\24317-DO_NOT_OPEN.nwd"
 
 # Paths (Modify as needed)
 PROJECTS_DIR = r"S:\Projects"  # Directory containing all projects
@@ -16,7 +16,7 @@ NWD_EXT = ".nwd"
 
 def get_resource_path(relative_path):
     '''Get absolute path to a resource, works for development and PyInstaller builds'''
-    if (getattr, 'frozen', False):
+    if getattr(sys, '_MEIPASS', False):
         base_path = sys._MEIPASS
     else:
         base_path = os.path.abspath(".")
@@ -102,7 +102,7 @@ class NWGUI:
         try:
             command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", CONVERT_PS_SCRIPT, nwf_file, nwd_file]
             subprocess.run(command, check=True, shell=True)
-            messagebox.showinfo("Success", f"Generated NWD: {os.path.basename(nwd_file)}")
+            messagebox.showinfo("Success", f"Generating NWD: {os.path.basename(nwd_file)}...")
         except subprocess.CalledProcessError as e:
             messagebox.showerror("Error", f"Failed to generate NWD: {e}")
 
