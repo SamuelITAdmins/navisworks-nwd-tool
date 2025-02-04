@@ -16,18 +16,17 @@ NWD_EXT = ".nwd"
 
 def get_resource_path(relative_path):
     '''Get absolute path to a resource, works for development and PyInstaller builds'''
-    if getattr(sys, '_MEIPASS', False):
-        base_path = sys._MEIPASS
-    else:
-        base_path = os.path.abspath(".")
-    
-    return os.path.join(base_path, relative_path)
+    if getattr(sys, '_MEIPASS', False): # If running from .exe file
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.abspath(relative_path) # When running locally (python cmd)
+
 CONVERT_PS_SCRIPT = get_resource_path("scripts/convertNWFfile.ps1")
 OPEN_PS_SCRIPT = get_resource_path("scripts/openNWfile.ps1")
 
 class NWGUI:
     def __init__(self, root):
         self.root = root
+        root.iconbitmap(get_resource_path("se.ico"))
         self.root.title("Navisworks Project Manager")
 
         # Dropdown Label
