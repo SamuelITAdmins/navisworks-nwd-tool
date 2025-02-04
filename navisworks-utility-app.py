@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 import subprocess
@@ -12,8 +13,17 @@ PROJECTS_DIR = r"S:\Projects"  # Directory containing all projects
 NAVISWORKS_TEMP_DIR = r"C:\Navisworks" # Directory containing copied Navisworks files
 NWF_EXT = ".nwf"
 NWD_EXT = ".nwd"
-CONVERT_PS_SCRIPT = r"C:\\Users\\sapozder\\Sandbox\\navisworks-nwd-tool\\ConvertNWFtoNWD.ps1"
-OPEN_PS_SCRIPT = r"C:\\Users\\sapozder\\Sandbox\\navisworks-nwd-tool\\OpenNWFile.ps1"
+
+def get_resource_path(relative_path):
+    '''Get absolute path to a resource, works for development and PyInstaller builds'''
+    if (getattr, 'frozen', False):
+        base_path = sys._MEIPASS
+    else:
+        base_path = os.path.abspath(".")
+    
+    return os.path.join(base_path, relative_path)
+CONVERT_PS_SCRIPT = get_resource_path("scripts/convertNWFfile.ps1")
+OPEN_PS_SCRIPT = get_resource_path("scripts/openNWfile.ps1")
 
 class NWGUI:
     def __init__(self, root):
@@ -91,7 +101,7 @@ class NWGUI:
 
         try:
             command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", CONVERT_PS_SCRIPT, nwf_file, nwd_file]
-            subprocess.run(command, check=True)
+            subprocess.run(command, check=True, shell=True)
             messagebox.showinfo("Success", f"Generated NWD: {os.path.basename(nwd_file)}")
         except subprocess.CalledProcessError as e:
             messagebox.showerror("Error", f"Failed to generate NWD: {e}")
@@ -104,7 +114,7 @@ class NWGUI:
 
         try:
             command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", OPEN_PS_SCRIPT, source_path, dest_path]
-            subprocess.run(command, check=True)
+            subprocess.run(command, check=True, shell=True)
             messagebox.showinfo("Success", f"Opened {os.path.basename(source_path)} locally as {dest_path}")
         except subprocess.CalledProcessError as e:
             messagebox.showerror("Error", f"Failed to open {source_path}: {e}")
@@ -116,7 +126,7 @@ class NWGUI:
             return
 
         nwd_file = os.path.join(project_path, "CAD", "Piping", "Models", "_DesignReview", f"{self.project_num}-DO_NOT_OPEN{NWD_EXT}")
-        dest_file = os.path.join("C:\\", "Navisworks", f"{self.project_num}-OverallModel{NWD_EXT}")
+        dest_file = os.path.join(NAVISWORKS_TEMP_DIR, f"{self.project_num}-OverallModel{NWD_EXT}")
         self.open_file(nwd_file, dest_file)
 
     def open_nwf(self):
@@ -126,7 +136,7 @@ class NWGUI:
             return
 
         nwf_file = os.path.join(project_path, "CAD", "Piping", "Models", "_DesignReview", f"{self.project_num}-OverallModel{NWF_EXT}")
-        dest_file = os.path.join("C:\\", "Navisworks", f"{self.project_num}-OverallModel{NWF_EXT}")
+        dest_file = os.path.join(NAVISWORKS_TEMP_DIR, f"{self.project_num}-OverallModel{NWF_EXT}")
         self.open_file(nwf_file, dest_file)
 
 if __name__ == "__main__":
