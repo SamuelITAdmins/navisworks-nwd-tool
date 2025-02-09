@@ -23,20 +23,20 @@ Start-Process -filepath $navisworksPath -Argumentlist $arguments
 
 # Stall until the temporary file that does the conversion is created
 $tempFile = $nwdPath + "~"
-$waiting = 120 # Hyperparameter: the number of seconds to wait for the temp file to be created
+$waiting = 60 # variable: the number of seconds to wait for the temp file to be created
 while (-Not (Test-Path $tempFile)) {
     Start-Sleep -Seconds 1
     $waiting--
-    if ($waiting -eq 0) {
-        Write-Host "Error during Conversion: Conversion did not begin in time, aborting..."
-        exit 1
-    }
 }
 
 # Stall until the temporary file no longer exists
-Write-Host "Waiting for temporary file to be removed: $tempFile"
-while (Test-Path $tempFile) {
-    Start-Sleep -Seconds 1
+if (Test-Path $tempFile) {
+    Write-Host "Waiting for temporary file to be removed: $tempFile"
+    while (Test-Path $tempFile) {
+        Start-Sleep -Seconds 1
+    }
+    Write-Host "Success: NWD generated $nwdPath"
+} else {
+    Write-Host "Temp file not created in time, conversion will begin later..."
+    exit 1
 }
-
-Write-Host "Success: NWD generated $nwdPath"

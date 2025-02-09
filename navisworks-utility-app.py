@@ -124,6 +124,7 @@ class NWGUI:
             self.loading_label.config(text="")
         except subprocess.CalledProcessError as e:
             messagebox.showerror("Error", f"Failed to generate NWD: {e}")
+            self.enable_gui()
             return
 
         # Re-enable the GUI after the process is finished
