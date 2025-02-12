@@ -8,11 +8,11 @@ $navisworksPath = "C:\Program Files\Autodesk\Navisworks Manage 2024\Roamer.exe"
 
 # Test pathing
 if (-Not (Test-Path $navisworksPath)) {
-    Write-Host "Error during Conversion: Navisworks is not installed!"
+    Write-Error -Message "Error during Conversion: Navisworks is not installed!" -Category ResourceUnavailable
     exit 1
 }
 if (-Not (Test-Path $nwfPath)) {
-    Write-Host "Error during Conversion: NWF file not found!"
+    Write-Error -Message "Error during Conversion: NWF file not found!" -Category ResourceUnavailable
     exit 1
 }
 
@@ -23,8 +23,8 @@ Start-Process -filepath $navisworksPath -Argumentlist $arguments
 
 # Stall until the temporary file that does the conversion is created
 $tempFile = $nwdPath + "~"
-$waiting = 60 # variable: the number of seconds to wait for the temp file to be created
-while (-Not (Test-Path $tempFile)) {
+$waiting = 2 # variable: the number of seconds to wait for the temp file to be created
+while (-Not (Test-Path $tempFile) -and ($waiting -gt 0)) {
     Start-Sleep -Seconds 1
     $waiting--
 }
@@ -37,6 +37,6 @@ if (Test-Path $tempFile) {
     }
     Write-Host "Success: NWD generated $nwdPath"
 } else {
-    Write-Host "Temp file not created in time, conversion will begin later..."
+    Write-Error "Temp file not created in time, conversion will begin and NWD can be opened later"
     exit 1
 }

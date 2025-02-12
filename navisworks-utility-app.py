@@ -120,11 +120,20 @@ class NWGUI:
             self.loading_label.config(text="Generating NWD, please wait...")
             self.root.update_idletasks()
             command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", CONVERT_PS_SCRIPT, nwf_file, nwd_file]
-            subprocess.run(command, check=True, shell=True)
+            subprocess.run(command, capture_output=True, check=True, shell=True)
             self.loading_label.config(text="")
         except subprocess.CalledProcessError as e:
-            messagebox.showerror("Error", f"Failed to generate NWD: {e}")
+            print(f'return code {e.returncode}')
+            print(f'cmd {e.cmd}')
+            print(f'output {e.output}')
+            print(f'stderr {e.stderr}')
+            print(f'stdout {e.stdout}')
+            messagebox.showerror("Error", f"Failed to generate NWD: {e.stderr}")
+            self.loading_label.config(text="")
             self.enable_gui()
+            return
+        except Exception as e:
+            print(f"An unexpected error occurred: {e}")
             return
 
         # Re-enable the GUI after the process is finished
