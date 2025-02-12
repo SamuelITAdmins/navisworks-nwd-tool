@@ -31,19 +31,19 @@ class NWGUI:
         self.root.title("Navisworks Project Manager")
 
         # Dropdown Label
-        ttk.Label(root, text="Select Project:").grid(row=0, column=0, padx=5, pady=5)
+        ttk.Label(root, text="Select Project:").grid(row=0, column=0, padx=0, pady=2)
 
         # Dropdown for Projects
         self.project_num = ''
         self.project_name = tk.StringVar()
-        self.project_dropdown = ttk.Combobox(root, textvariable=self.project_name, width=40, state="readonly")
-        self.project_dropdown.grid(row=1, column=0, columnspan=3, padx=5, pady=5)
+        self.project_dropdown = ttk.Combobox(root, textvariable=self.project_name, width=45, state="readonly")
+        self.project_dropdown.grid(row=1, column=0, columnspan=3, padx=5, pady=0)
 
         # Buttons
-        ttk.Button(root, text="Generate NWD", command=self.generate_nwd).grid(row=2, column=0, padx=5, pady=5)
-        ttk.Button(root, text="Open NWD", command=self.open_nwd).grid(row=2, column=1, padx=5, pady=5)
-        ttk.Button(root, text="Open NWF", command=self.open_nwf).grid(row=2, column=2, padx=5, pady=5)
-        ttk.Button(root, text="Refresh List", command=self.load_projects).grid(row=3, column=0, padx=5, pady=5)
+        ttk.Button(root, text="Generate NWD", command=self.generate_nwd).grid(row=2, column=0, padx=10, pady=15)
+        ttk.Button(root, text="Open NWD", command=self.open_nwd).grid(row=2, column=1, padx=10, pady=15)
+        ttk.Button(root, text="Open NWF", command=self.open_nwf).grid(row=2, column=2, padx=10, pady=15)
+        ttk.Button(root, text="Refresh List", command=self.load_projects).grid(row=3, column=0, padx=10, pady=5)
 
         # Loading message (hidden initially)
         self.loading_label = ttk.Label(root, text="", font=('Segoe UI', 12))
@@ -114,31 +114,32 @@ class NWGUI:
             messagebox.showerror("Error", f"NWF file not found for project: {project_path}")
             return
         
-        # Disable the entire GUI until powershell script executes
         try:
+            # Disable the entire GUI until powershell script executes
             self.disable_gui()
             self.loading_label.config(text="Generating NWD, please wait...")
             self.root.update_idletasks()
+
+            # Run the powershell conversion script
             command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", CONVERT_PS_SCRIPT, nwf_file, nwd_file]
-            subprocess.run(command, capture_output=True, check=True, shell=True)
-            self.loading_label.config(text="")
-        except subprocess.CalledProcessError as e:
-            print(f'return code {e.returncode}')
-            print(f'cmd {e.cmd}')
-            print(f'output {e.output}')
-            print(f'stderr {e.stderr}')
-            print(f'stdout {e.stdout}')
-            messagebox.showerror("Error", f"Failed to generate NWD: {e.stderr}")
+            result = subprocess.run(command, capture_output=True, text=True, shell=True)
+
+            # Re-enable the entire GUI once the script comes to a result
             self.loading_label.config(text="")
             self.enable_gui()
-            return
-        except Exception as e:
-            print(f"An unexpected error occurred: {e}")
-            return
 
-        # Re-enable the GUI after the process is finished
-        self.enable_gui()
-        messagebox.showinfo("Success", f"Generated NWD for {self.project_num}")
+            if result.returncode != 0:
+                # If the script errored...
+                err_msg = result.stdout.strip().split('\n')[-1]
+                messagebox.showerror("Error", f"NWD Conversion Error: {err_msg}")
+                print(result.stdout.strip())
+            else:
+                # If conversion was successful
+                messagebox.showinfo("Success", f"Generated NWD for {self.project_num}")
+                print(result.stdout.strip())
+        except Exception as e:
+            messagebox.showerror("Error", f"An unexpected error occurred, report the bug and close the program")
+            return
 
     def open_file(self, source_path, dest_path):
         """Open a file using PowerShell."""
@@ -151,7 +152,8 @@ class NWGUI:
             subprocess.run(command, check=True, shell=True)
             # messagebox.showinfo("Success", f"Opened {os.path.basename(source_path)} locally as {dest_path}")
         except subprocess.CalledProcessError as e:
-            messagebox.showerror("Error", f"Failed to open {source_path} locally as {dest_path}: {e}")
+            err_msg = e.stdout.strip().split('\n')[-1]
+            messagebox.showerror("Error", f"Failed to open {source_path} locally as {dest_path}: {err_msg}")
 
     def open_nwd(self):
         """Open the NWD file."""
