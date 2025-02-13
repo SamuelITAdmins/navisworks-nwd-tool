@@ -22,6 +22,7 @@ $arguments = "-OpenFile `"$nwfPath`" -NoGui -SaveFile `"$nwdPath`" -Exit"
 Start-Process -filepath $navisworksPath -Argumentlist $arguments
 
 # Stall until the temporary file that does the conversion is created
+Write-Host "Opening NWF"
 $tempFile = $nwdPath + "~"
 $waiting = 60 # variable: the number of seconds to wait for the temp file to be created
 while (-Not (Test-Path $tempFile) -and ($waiting -gt 0)) {
@@ -31,7 +32,7 @@ while (-Not (Test-Path $tempFile) -and ($waiting -gt 0)) {
 
 # Stall until the temporary file no longer exists
 if (Test-Path $tempFile) {
-    Write-Host "Waiting for temporary file to be removed: $tempFile"
+    Write-Host "Temporary NWD file created: $tempFile"
     while (Test-Path $tempFile) {
         Start-Sleep -Seconds 1
     }

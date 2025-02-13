@@ -5,6 +5,8 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import subprocess
 import threading
+import queue
+import time
 
 # nwf file example: "\\stor-dn-01\projects\Projects\24317_Electra_CO_EPCM\CAD\Piping\Models\_DesignReview\24317-OverallModel.nwf"
 # nwd file example: "\\stor-dn-01\projects\Projects\24317_Electra_CO_EPCM\CAD\Piping\Models\_DesignReview\24317-DO_NOT_OPEN.nwd"
@@ -40,7 +42,8 @@ class NWGUI:
         self.project_dropdown.grid(row=1, column=0, columnspan=3, padx=5, pady=0)
 
         # Buttons
-        ttk.Button(root, text="Generate NWD", command=self.generate_nwd).grid(row=2, column=0, padx=10, pady=15)
+        self.generate_button = ttk.Button(root, text="Generate NWD", command=lambda: threading.Thread(target=self.generate_nwd, daemon=True).start())
+        self.generate_button.grid(row=2, column=0, padx=10, pady=15)
         ttk.Button(root, text="Open NWD", command=self.open_nwd).grid(row=2, column=1, padx=10, pady=15)
         ttk.Button(root, text="Open NWF", command=self.open_nwf).grid(row=2, column=2, padx=10, pady=15)
         ttk.Button(root, text="Refresh List", command=self.load_projects).grid(row=3, column=0, padx=10, pady=5)
@@ -49,6 +52,15 @@ class NWGUI:
         self.loading_label = ttk.Label(root, text="", font=('Segoe UI', 12))
         self.loading_label.grid(row=4, column=0, columnspan=3, padx=5, pady=5)
         self.load_projects()
+
+        # NWD conversion progress bar (hidden initially)
+        self.progress_var = tk.DoubleVar()
+        self.progress_bar = ttk.Progressbar(root, length=300, mode="determinate", variable=self.progress_var)
+        self.progress_bar.grid(row=5, column=0, columnspan=3, padx=5, pady=5)
+        self.progress_bar.grid_remove() # hide the progrss bar
+
+        # Queue for powershell script communication
+        self.script_queue = queue.Queue()
     
     def extract_project_num(self, project_name):
         """Extract the project number from the full project name, discard if the project name does not start with numbers"""
@@ -122,24 +134,86 @@ class NWGUI:
 
             # Run the powershell conversion script
             command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", CONVERT_PS_SCRIPT, nwf_file, nwd_file]
-            result = subprocess.run(command, capture_output=True, text=True, shell=True)
+            process = subprocess.Popen(
+                command, 
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True, 
+                shell=True
+            )
+
+            self.progress_bar.grid()
+            def read_output():
+                """Read the Write-Host from the powershell script"""
+                for line in process.stdout:
+                    if line.strip(): # Ignore empty lines
+                        self.script_queue.put(line.strip())
+                process.stdout.close()
+                process.wait()
+                self.script_queue.put("Completed")
+
+            threading.Thread(target=read_output, daemon=True).start()
+            root.after(100, self.update_progress)
 
             # Re-enable the entire GUI once the script comes to a result
             self.loading_label.config(text="")
             self.enable_gui()
 
-            if result.returncode != 0:
+            if process.returncode != 0:
                 # If the script errored...
-                err_msg = result.stdout.strip().split('\n')[-1]
+                err_msg = process.stdout.strip().split('\n')[-1]
                 messagebox.showerror("Error", f"NWD Conversion Error: {err_msg}")
-                print(result.stdout.strip())
             else:
                 # If conversion was successful
                 messagebox.showinfo("Success", f"Generated NWD for {self.project_num}")
-                print(result.stdout.strip())
         except Exception as e:
             messagebox.showerror("Error", f"An unexpected error occurred, report the bug and close the program")
+            print(e)
             return
+
+    def update_progress(self):
+        """Reads messages from PowerShell and updates the progress bar accordingly"""
+        try:
+            while not self.script_queue.empty():
+                message = self.script_queue.get_nowait()
+                if "Beginning conversion" in message:
+                    self.progress_var.set(10)
+                elif "Opening NWF" in message:
+                    self.progress_var.set(25)
+                elif "Temporary NWD file created" in message:
+                    self.progress_var.set(50)
+                    threading.Thread(target=self.track_file_size, daemon=True).start()
+                elif "Completed" in message:
+                    self.progress_var.set(100)
+                    # self.progress_bar.grid_remove()
+        except queue.Empty:
+            pass
+        
+        if self.progress_var.get() < 100:
+            root.after(100, self.update_progress)
+    
+    def track_file_size(self):
+        """Monitors the NWD~ (temp file) size and updates progress dynammically"""
+        # TODO: store nwf and nwd as class variables
+        project_path = self.get_selected_project()
+        if not project_path:
+            return
+        
+        final_file = os.path.join(project_path, "CAD", "Piping", "Models", "_DesignReview", f"{self.project_num}-OverallModel{NWD_EXT}")
+        temp_file = os.path.join(project_path, "CAD", "Piping", "Models", "_DesignReview", f"{self.project_num}-DO_NOT_OPEN{NWD_EXT}~")
+
+        if not os.path.exists(temp_file) or not os.path.exists(final_file):
+            return # Exit if files don't exist
+
+        final_size = os.path.getsize(final_file)
+        while os.path.exists(temp_file):
+            temp_size = os.path.getsize(temp_file)
+            if temp_size >= final_size or not os.path.exists(temp_file):
+                break
+            self.progress_var.set(50 + (temp_size / final_size) * 50) # Scale progress from 50% to 100%
+            time.sleep(0.5)
+        
+        self.progress_var.set(100)
 
     def open_file(self, source_path, dest_path):
         """Open a file using PowerShell."""
@@ -178,12 +252,18 @@ class NWGUI:
     def disable_gui(self):
         """Disable all widgets in the root window."""
         for widget in self.root.winfo_children():
-            widget.config(state="disabled")
+            try:
+                widget.config(state="disabled")
+            except tk.TclError:
+                pass
 
     def enable_gui(self):
         """Enable all widgets in the root window."""
         for widget in self.root.winfo_children():
-            widget.config(state="normal")
+            try:
+                widget.config(state="normal")
+            except tk.TclError:
+                pass
 
 if __name__ == "__main__":
     root = tk.Tk()
