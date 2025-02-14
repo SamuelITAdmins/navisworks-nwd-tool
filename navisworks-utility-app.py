@@ -1,4 +1,3 @@
-import os
 import re
 import sys
 import tkinter as tk
@@ -6,25 +5,37 @@ from tkinter import ttk, messagebox
 import subprocess
 import threading
 import queue
+from pathlib import Path
 import time
 
 # nwf file example: "\\stor-dn-01\projects\Projects\24317_Electra_CO_EPCM\CAD\Piping\Models\_DesignReview\24317-OverallModel.nwf"
 # nwd file example: "\\stor-dn-01\projects\Projects\24317_Electra_CO_EPCM\CAD\Piping\Models\_DesignReview\24317-DO_NOT_OPEN.nwd"
 
 # Paths (Modify as needed)
-PROJECTS_DIR = r"S:\Projects"  # Directory containing all projects
-NAVISWORKS_TEMP_DIR = r"C:\Navisworks" # Directory containing copied Navisworks files
+PROJECTS_DIR = Path(r"S:\Projects")  # Directory containing all projects
+NAVISWORKS_TEMP_DIR = Path(r"C:\Navisworks") # Directory containing copied Navisworks files
+NW_FILES_PATH = Path("CAD") / "Piping" / "Models" / "_DesignReview"
 NWF_EXT = ".nwf"
 NWD_EXT = ".nwd"
 
 def get_resource_path(relative_path):
     '''Get absolute path to a resource, works for development and PyInstaller builds'''
     if getattr(sys, '_MEIPASS', False): # If running from .exe file
-        return os.path.join(sys._MEIPASS, relative_path)
-    return os.path.abspath(relative_path) # When running locally (python cmd)
+        return Path(sys._MEIPASS) / relative_path
+    return Path(relative_path).resolve() # When running locally (python cmd)
 
 CONVERT_PS_SCRIPT = get_resource_path("scripts/convertNWFfile.ps1")
 OPEN_PS_SCRIPT = get_resource_path("scripts/openNWfile.ps1")
+
+# TODO: Implement progress bar maps if additional operations are added
+# TODO: Maintain the threading operation with a conversion map during temp file conversion
+# Progress Bar Maps for Operations
+NWD_CONVERSION_MAP = {
+    "Beginning conversion": 10,
+    "Opening NWF": 25,
+    "Temporary NWD file created": 50,
+    "Completed": 100,
+}
 
 class NWGUI:
     def __init__(self, root):
@@ -61,31 +72,18 @@ class NWGUI:
 
         # Queue for powershell script communication
         self.script_queue = queue.Queue()
-    
-    def extract_project_num(self, project_name):
-        """Extract the project number from the full project name, discard if the project name does not start with numbers"""
-        prefix = re.split(r'[_ ]', project_name, 1)[0]
-        return prefix if re.match(r'^\d[\d-]*$', prefix) else None
 
     def load_projects(self):
         """Load project numbers from the directory with a wait message."""
         self.disable_gui()
         self.loading_label.config(text="Loading projects, please wait...")  # Show loading message
-        self.root.update_idletasks()  # Force update GUI
 
-        def background_task():
-            if not os.path.exists(PROJECTS_DIR):
+        def fetch_projects():
+            if not PROJECTS_DIR.exists():
                 messagebox.showerror("Error", "Project Directory not found!")
                 return
 
-            valid_projects = []
-            for d in os.listdir(PROJECTS_DIR):
-                if os.path.isdir(os.path.join(PROJECTS_DIR, d)):
-                    prefix = self.extract_project_num(d)
-                    if prefix:
-                        valid_projects.append((d, prefix))
-
-            # Sort project names based on project number (desc)
+            valid_projects = [(p.name, self.extract_project_num(p.name)) for p in PROJECTS_DIR.iterdir() if p.is_dir() and self.extract_project_num(p.name)]
             valid_projects.sort(key=lambda x: x[1], reverse=True)
 
             if valid_projects:
@@ -97,8 +95,8 @@ class NWGUI:
             self.loading_label.config(text="")  # Hide loading message after projects are loaded
             self.enable_gui()
 
-        # Run in background thread
-        threading.Thread(target=background_task, daemon=True).start()
+        # Run in background thread to not make the GUI unresponsive
+        threading.Thread(target=fetch_projects, daemon=True).start()
 
     def get_selected_project(self):
         """Returns the selected project path or None if none selected."""
@@ -111,7 +109,12 @@ class NWGUI:
         if not self.project_num:
             messagebox.showerror("Error", "Invalid project number structure!")
 
-        return os.path.join(PROJECTS_DIR, project)
+        return PROJECTS_DIR / project
+    
+    def extract_project_num(self, project_name):
+        """Extract the project number from the full project name, discard if the project name does not start with numbers"""
+        prefix = re.split(r'[_ ]', project_name, 1)[0]
+        return prefix if re.match(r'^\d[\d-]*$', prefix) else None
 
     def generate_nwd(self):
         """Generate an NWD file from the NWF file using PowerShell."""
@@ -119,57 +122,67 @@ class NWGUI:
         if not project_path:
             return
 
-        nwf_file = os.path.join(project_path, "CAD", "Piping", "Models", "_DesignReview", f"{self.project_num}-OverallModel{NWF_EXT}")
-        nwd_file = os.path.join(project_path, "CAD", "Piping", "Models", "_DesignReview", f"{self.project_num}-DO_NOT_OPEN{NWD_EXT}")
+        nwf_file = project_path / NW_FILES_PATH / f"{self.project_num}-OverallModel{NWF_EXT}"
+        nwd_file = project_path / NW_FILES_PATH / f"{self.project_num}-DO_NOT_OPEN{NWD_EXT}"
 
-        if not os.path.exists(nwf_file):
-            messagebox.showerror("Error", f"NWF file not found for project: {project_path}")
+        if not nwf_file.exists():
+            messagebox.showerror("Error", f"NWF file {nwf_file} not found for project: {project_path}")
             return
         
-        try:
-            # Disable the entire GUI until powershell script executes
-            self.disable_gui()
-            self.loading_label.config(text="Generating NWD, please wait...")
-            self.root.update_idletasks()
+        if not CONVERT_PS_SCRIPT.exists():
+            messagebox.showerror("Error", "Conversion PowerShell script not found!")
+            self.enable_gui()
+            return
+        
+        # Disable the entire GUI until powershell script executes
+        self.disable_gui()
+        self.loading_label.config(text="Generating NWD, please wait...")
+        self.progress_bar.grid()
 
-            # Run the powershell conversion script
-            command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", CONVERT_PS_SCRIPT, nwf_file, nwd_file]
-            process = subprocess.Popen(
-                command, 
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True, 
-                shell=True
-            )
+        # Run the powershell conversion script
+        command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", str(CONVERT_PS_SCRIPT), str(nwf_file), str(nwd_file)]
+        process = subprocess.Popen(
+            command, 
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True, 
+            shell=True
+        )
+        
+        def process_output():
+            """Reads PowerShell script output and updates UI accordingly."""
+            error_message = None
 
-            self.progress_bar.grid()
-            def read_output():
-                """Read the Write-Host from the powershell script"""
+            try:
                 for line in process.stdout:
-                    if line.strip(): # Ignore empty lines
+                    if line.strip():
                         self.script_queue.put(line.strip())
+                        self.loading_label.config(text=line.strip())
                 process.stdout.close()
                 process.wait()
-                self.script_queue.put("Completed")
 
-            threading.Thread(target=read_output, daemon=True).start()
-            root.after(100, self.update_progress)
-
-            # Re-enable the entire GUI once the script comes to a result
-            self.loading_label.config(text="")
+                if process.returncode != 0:
+                    error_message = process.stdout.strip().split('\n')[-1] or "Unknown error occured."
+            except Exception as e:
+                error_message = f"Unexpected error: {str(e)}"
+            
+            # Schedule GUI updates back on the main thread
+            self.root.after(0, finalize_output, error_message)
+        
+        def finalize_output(error_message):
+            """Handles GUI updates after script execution."""
             self.enable_gui()
+            self.loading_label.config(text="")
+            self.progress_bar.grid_remove()
 
-            if process.returncode != 0:
-                # If the script errored...
-                err_msg = process.stdout.strip().split('\n')[-1]
-                messagebox.showerror("Error", f"NWD Conversion Error: {err_msg}")
+            if error_message:
+                messagebox.showerror("Error", f"NWD Conversion Error: {error_message}")
             else:
-                # If conversion was successful
                 messagebox.showinfo("Success", f"Generated NWD for {self.project_num}")
-        except Exception as e:
-            messagebox.showerror("Error", f"An unexpected error occurred, report the bug and close the program")
-            print(e)
-            return
+        
+        # Start output processing in a separate thread
+        threading.Thread(target=process_output, daemon=True).start()
+        root.after(100, self.update_progress)
 
     def update_progress(self):
         """Reads messages from PowerShell and updates the progress bar accordingly"""
@@ -185,7 +198,7 @@ class NWGUI:
                     threading.Thread(target=self.track_file_size, daemon=True).start()
                 elif "Completed" in message:
                     self.progress_var.set(100)
-                    # self.progress_bar.grid_remove()
+                    self.progress_bar.grid_remove()
         except queue.Empty:
             pass
         
@@ -194,21 +207,20 @@ class NWGUI:
     
     def track_file_size(self):
         """Monitors the NWD~ (temp file) size and updates progress dynammically"""
-        # TODO: store nwf and nwd as class variables
         project_path = self.get_selected_project()
         if not project_path:
             return
         
-        final_file = os.path.join(project_path, "CAD", "Piping", "Models", "_DesignReview", f"{self.project_num}-OverallModel{NWD_EXT}")
-        temp_file = os.path.join(project_path, "CAD", "Piping", "Models", "_DesignReview", f"{self.project_num}-DO_NOT_OPEN{NWD_EXT}~")
+        final_file = project_path / NW_FILES_PATH / f"{self.project_num}-OverallModel{NWD_EXT}"
+        temp_file = project_path / NW_FILES_PATH / f"{self.project_num}-DO_NOT_OPEN{NWD_EXT}~"
 
-        if not os.path.exists(temp_file) or not os.path.exists(final_file):
+        if not temp_file.exists() or not final_file.exists():
             return # Exit if files don't exist
 
-        final_size = os.path.getsize(final_file)
-        while os.path.exists(temp_file):
-            temp_size = os.path.getsize(temp_file)
-            if temp_size >= final_size or not os.path.exists(temp_file):
+        final_size = final_file.stat().st_size
+        while temp_file.exists():
+            temp_size = temp_file.stat().st_size
+            if temp_size >= final_size or not temp_file.exists():
                 break
             self.progress_var.set(50 + (temp_size / final_size) * 50) # Scale progress from 50% to 100%
             time.sleep(0.5)
@@ -217,14 +229,18 @@ class NWGUI:
 
     def open_file(self, source_path, dest_path):
         """Open a file using PowerShell."""
-        if not os.path.exists(source_path):
+        if not source_path.exists():
             messagebox.showerror("Error", f"File not found when opening: {source_path}")
             return
 
         try:
-            command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", OPEN_PS_SCRIPT, source_path, dest_path]
+            if not OPEN_PS_SCRIPT.exists():
+                messagebox.showerror("Error", "Open PowerShell script not found!")
+                return
+
+            command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", str(OPEN_PS_SCRIPT), str(source_path), str(dest_path)]
             subprocess.run(command, check=True, shell=True)
-            # messagebox.showinfo("Success", f"Opened {os.path.basename(source_path)} locally as {dest_path}")
+            # messagebox.showinfo("Success", f"Opened {source_path.name} locally as {dest_path}")
         except subprocess.CalledProcessError as e:
             err_msg = e.stdout.strip().split('\n')[-1]
             messagebox.showerror("Error", f"Failed to open {source_path} locally as {dest_path}: {err_msg}")
@@ -235,8 +251,8 @@ class NWGUI:
         if not project_path:
             return
 
-        nwd_file = os.path.join(project_path, "CAD", "Piping", "Models", "_DesignReview", f"{self.project_num}-DO_NOT_OPEN{NWD_EXT}")
-        dest_file = os.path.join(NAVISWORKS_TEMP_DIR, f"{self.project_num}-OverallModel{NWD_EXT}")
+        nwd_file = project_path / NW_FILES_PATH / f"{self.project_num}-DO_NOT_OPEN{NWD_EXT}"
+        dest_file = NAVISWORKS_TEMP_DIR / f"{self.project_num}-OverallModel{NWD_EXT}"
         self.open_file(nwd_file, dest_file)
 
     def open_nwf(self):
@@ -245,8 +261,8 @@ class NWGUI:
         if not project_path:
             return
 
-        nwf_file = os.path.join(project_path, "CAD", "Piping", "Models", "_DesignReview", f"{self.project_num}-OverallModel{NWF_EXT}")
-        dest_file = os.path.join(NAVISWORKS_TEMP_DIR, f"{self.project_num}-OverallModel{NWF_EXT}")
+        nwf_file = project_path / NW_FILES_PATH / f"{self.project_num}-OverallModel{NWF_EXT}"
+        dest_file = NAVISWORKS_TEMP_DIR / f"{self.project_num}-OverallModel{NWF_EXT}"
         self.open_file(nwf_file, dest_file)
     
     def disable_gui(self):
