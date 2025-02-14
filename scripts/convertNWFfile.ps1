@@ -12,7 +12,7 @@ if (-Not (Test-Path $navisworksPath)) {
     exit 1
 }
 if (-Not (Test-Path $nwfPath)) {
-    Write-Host "NWF file not found!"
+    Write-Host "NWF file not found! Likely not a Navisworks Project."
     exit 1
 }
 

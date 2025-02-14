@@ -124,10 +124,6 @@ class NWGUI:
 
         nwf_file = project_path / NW_FILES_PATH / f"{self.project_num}-OverallModel{NWF_EXT}"
         nwd_file = project_path / NW_FILES_PATH / f"{self.project_num}-DO_NOT_OPEN{NWD_EXT}"
-
-        # if not nwf_file.exists():
-        #     messagebox.showerror("Error", f"NWF file {nwf_file} not found for project: {project_path}")
-        #     return
         
         if not CONVERT_PS_SCRIPT.exists():
             messagebox.showerror("Error", "Conversion PowerShell script not found!")
@@ -155,15 +151,15 @@ class NWGUI:
             error_message = None
             try:
                 for line in process.stdout:
-                    print(line)
+                    # print(line) # message stream for debugging
                     if line.strip():
                         self.script_queue.put(line.strip())
                         self.loading_label.config(text=line.strip())
-                process.stdout.close()
+                        last_line = line.strip()
                 process.wait()
-
                 if process.returncode != 0:
-                    error_message = process.stdout.strip().split('\n')[-1] or "Unknown error occured."
+                    error_message = last_line or "Unknown error occured."
+                process.stdout.close()
             except Exception as e:
                 error_message = f"Unexpected error: {str(e)}"
             
@@ -217,13 +213,8 @@ class NWGUI:
         final_file = project_path / NW_FILES_PATH / f"{self.project_num}-DO_NOT_OPEN{NWD_EXT}"
         temp_file = project_path / NW_FILES_PATH / f"{self.project_num}-DO_NOT_OPEN{NWD_EXT}~"
 
-        if not temp_file.exists(): # or not final_file.exists():
-            print("temp does not exist")
-            if not final_file.exists():
-                print("final does not exist")
-                return # Exit if files don't exist
-            else:
-                return
+        if not temp_file.exists() or not final_file.exists():
+            return
 
         final_size = final_file.stat().st_size
         while temp_file.exists():
