@@ -45,3 +45,4 @@ $arguments = "-OpenFile " + $destinationPath + " -ShowGui"
 Start-Process -filepath $navisworksAppPath -Argumentlist $arguments
 
 Write-Host "Success: Opened $sourcePath locally as $destinationPath"
+exit 0

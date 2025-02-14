@@ -125,9 +125,9 @@ class NWGUI:
         nwf_file = project_path / NW_FILES_PATH / f"{self.project_num}-OverallModel{NWF_EXT}"
         nwd_file = project_path / NW_FILES_PATH / f"{self.project_num}-DO_NOT_OPEN{NWD_EXT}"
 
-        if not nwf_file.exists():
-            messagebox.showerror("Error", f"NWF file {nwf_file} not found for project: {project_path}")
-            return
+        # if not nwf_file.exists():
+        #     messagebox.showerror("Error", f"NWF file {nwf_file} not found for project: {project_path}")
+        #     return
         
         if not CONVERT_PS_SCRIPT.exists():
             messagebox.showerror("Error", "Conversion PowerShell script not found!")
@@ -137,6 +137,7 @@ class NWGUI:
         # Disable the entire GUI until powershell script executes
         self.disable_gui()
         self.loading_label.config(text="Generating NWD, please wait...")
+        self.progress_var.set(0)
         self.progress_bar.grid()
 
         # Run the powershell conversion script
@@ -146,15 +147,15 @@ class NWGUI:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True, 
-            shell=True
+            # shell=True
         )
         
         def process_output():
             """Reads PowerShell script output and updates UI accordingly."""
             error_message = None
-
             try:
                 for line in process.stdout:
+                    print(line)
                     if line.strip():
                         self.script_queue.put(line.strip())
                         self.loading_label.config(text=line.strip())
@@ -182,7 +183,7 @@ class NWGUI:
         
         # Start output processing in a separate thread
         threading.Thread(target=process_output, daemon=True).start()
-        root.after(100, self.update_progress)
+        self.root.after(100, self.update_progress)
 
     def update_progress(self):
         """Reads messages from PowerShell and updates the progress bar accordingly"""
@@ -191,12 +192,14 @@ class NWGUI:
                 message = self.script_queue.get_nowait()
                 if "Beginning conversion" in message:
                     self.progress_var.set(10)
+                    time.sleep(0.5)
                 elif "Opening NWF" in message:
                     self.progress_var.set(25)
-                elif "Temporary NWD file created" in message:
+                    time.sleep(0.5)
+                elif "Converting" in message:
                     self.progress_var.set(50)
                     threading.Thread(target=self.track_file_size, daemon=True).start()
-                elif "Completed" in message:
+                elif "Success" in message:
                     self.progress_var.set(100)
                     self.progress_bar.grid_remove()
         except queue.Empty:
@@ -211,11 +214,16 @@ class NWGUI:
         if not project_path:
             return
         
-        final_file = project_path / NW_FILES_PATH / f"{self.project_num}-OverallModel{NWD_EXT}"
+        final_file = project_path / NW_FILES_PATH / f"{self.project_num}-DO_NOT_OPEN{NWD_EXT}"
         temp_file = project_path / NW_FILES_PATH / f"{self.project_num}-DO_NOT_OPEN{NWD_EXT}~"
 
-        if not temp_file.exists() or not final_file.exists():
-            return # Exit if files don't exist
+        if not temp_file.exists(): # or not final_file.exists():
+            print("temp does not exist")
+            if not final_file.exists():
+                print("final does not exist")
+                return # Exit if files don't exist
+            else:
+                return
 
         final_size = final_file.stat().st_size
         while temp_file.exists():
@@ -224,8 +232,6 @@ class NWGUI:
                 break
             self.progress_var.set(50 + (temp_size / final_size) * 50) # Scale progress from 50% to 100%
             time.sleep(0.5)
-        
-        self.progress_var.set(100)
 
     def open_file(self, source_path, dest_path):
         """Open a file using PowerShell."""
