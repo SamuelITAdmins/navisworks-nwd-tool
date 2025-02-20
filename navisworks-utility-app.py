@@ -33,8 +33,8 @@ OPEN_PS_SCRIPT = get_resource_path("scripts/openNWfile.ps1")
 NWD_CONVERSION_MAP = {
     "Beginning conversion": 10,
     "Opening NWF": 25,
-    "Temporary NWD file created": 50,
-    "Completed": 100,
+    "Converting": 50,
+    "Success": 100,
 }
 
 class NWGUI:
@@ -127,7 +127,6 @@ class NWGUI:
         
         if not CONVERT_PS_SCRIPT.exists():
             messagebox.showerror("Error", "Conversion PowerShell script not found!")
-            self.enable_gui()
             return
         
         # Disable the entire GUI until powershell script executes
@@ -150,15 +149,16 @@ class NWGUI:
             """Reads PowerShell script output and updates UI accordingly."""
             error_message = None
             try:
-                for line in process.stdout:
-                    # print(line) # message stream for debugging
-                    if line.strip():
-                        self.script_queue.put(line.strip())
-                        self.loading_label.config(text=line.strip())
-                        last_line = line.strip()
+                for line in iter(process.stdout.readline, ''):
+                    message = line.strip()
+                    print(message) # message stream for debugging
+                    if message:
+                        self.script_queue.put(message)
+                        self.root.after(0, lambda: self.loading_label.config(text=message))
                 process.wait()
+
                 if process.returncode != 0:
-                    error_message = last_line or "Unknown error occured."
+                    error_message = message or "Unknown error occured."
                 process.stdout.close()
             except Exception as e:
                 error_message = f"Unexpected error: {str(e)}"
@@ -183,26 +183,21 @@ class NWGUI:
 
     def update_progress(self):
         """Reads messages from PowerShell and updates the progress bar accordingly"""
-        try:
-            while not self.script_queue.empty():
-                message = self.script_queue.get_nowait()
-                if "Beginning conversion" in message:
-                    self.progress_var.set(10)
-                    time.sleep(0.5)
-                elif "Opening NWF" in message:
-                    self.progress_var.set(25)
-                    time.sleep(0.5)
-                elif "Converting" in message:
-                    self.progress_var.set(50)
-                    threading.Thread(target=self.track_file_size, daemon=True).start()
-                elif "Success" in message:
-                    self.progress_var.set(100)
-                    self.progress_bar.grid_remove()
-        except queue.Empty:
-            pass
-        
+        while not self.script_queue.empty():
+            message = self.script_queue.get_nowait()
+
+            for key in NWD_CONVERSION_MAP:
+                if key in message:
+                    progress = NWD_CONVERSION_MAP.get(key, self.progress_var.get())
+                    self.progress_var.set(progress)
+                    break # stop checking when a key match is found
+            
+            # trigger track_file_size during NWD conversion
+            if "Converting" in message:
+                threading.Thread(target=self.track_file_size, daemon=True).start()
+
         if self.progress_var.get() < 100:
-            root.after(100, self.update_progress)
+            self.root.after(100, self.update_progress)  # Recursion until completed
     
     def track_file_size(self):
         """Monitors the NWD~ (temp file) size and updates progress dynammically"""
@@ -219,10 +214,15 @@ class NWGUI:
         final_size = final_file.stat().st_size
         while temp_file.exists():
             temp_size = temp_file.stat().st_size
-            if temp_size >= final_size or not temp_file.exists():
+            if temp_size >= final_size:
                 break
-            self.progress_var.set(50 + (temp_size / final_size) * 50) # Scale progress from 50% to 100%
+
+            # scale dynamically from 50 -> 100 based on temp file size
+            new_progress = 50 + (temp_size / final_size) * 50
+            self.progress_var.set(max(self.progress_var.get(), new_progress))  # Avoid rollback
             time.sleep(0.5)
+        
+        self.progress_var.set(100)
 
     def open_file(self, source_path, dest_path):
         """Open a file using PowerShell."""
