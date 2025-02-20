@@ -53,7 +53,7 @@ class NWGUI:
         self.project_dropdown.grid(row=1, column=0, columnspan=3, padx=5, pady=0)
 
         # Buttons
-        self.generate_button = ttk.Button(root, text="Generate NWD", command=lambda: threading.Thread(target=self.generate_nwd, daemon=True).start())
+        self.generate_button = ttk.Button(root, text="Generate NWD", command=self.generate_nwd)
         self.generate_button.grid(row=2, column=0, padx=10, pady=15)
         ttk.Button(root, text="Open NWD", command=self.open_nwd).grid(row=2, column=1, padx=10, pady=15)
         ttk.Button(root, text="Open NWF", command=self.open_nwf).grid(row=2, column=2, padx=10, pady=15)
@@ -130,10 +130,10 @@ class NWGUI:
             return
         
         # Disable the entire GUI until powershell script executes
-        self.disable_gui()
         self.loading_label.config(text="Generating NWD, please wait...")
         self.progress_var.set(0)
         self.progress_bar.grid()
+        self.disable_gui()
 
         # Run the powershell conversion script
         command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", str(CONVERT_PS_SCRIPT), str(nwf_file), str(nwd_file)]
@@ -141,7 +141,8 @@ class NWGUI:
             command, 
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True, 
+            text=True,
+            creationflags=subprocess.CREATE_NO_WINDOW,
             # shell=True
         )
         
@@ -151,10 +152,11 @@ class NWGUI:
             try:
                 for line in iter(process.stdout.readline, ''):
                     message = line.strip()
-                    print(message) # message stream for debugging
+                    # print(message) # message stream for debugging
                     if message:
                         self.script_queue.put(message)
                         self.root.after(0, lambda: self.loading_label.config(text=message))
+                        self.root.after(0, lambda msg=message: self.root.after(0, self.update_progress(message)))
                 process.wait()
 
                 if process.returncode != 0:
@@ -170,6 +172,7 @@ class NWGUI:
             """Handles GUI updates after script execution."""
             self.enable_gui()
             self.loading_label.config(text="")
+            self.progress_var.set(0)
             self.progress_bar.grid_remove()
 
             if error_message:
@@ -179,25 +182,18 @@ class NWGUI:
         
         # Start output processing in a separate thread
         threading.Thread(target=process_output, daemon=True).start()
-        self.root.after(100, self.update_progress)
 
-    def update_progress(self):
-        """Reads messages from PowerShell and updates the progress bar accordingly"""
-        while not self.script_queue.empty():
-            message = self.script_queue.get_nowait()
-
-            for key in NWD_CONVERSION_MAP:
-                if key in message:
-                    progress = NWD_CONVERSION_MAP.get(key, self.progress_var.get())
-                    self.progress_var.set(progress)
-                    break # stop checking when a key match is found
-            
-            # trigger track_file_size during NWD conversion
-            if "Converting" in message:
-                threading.Thread(target=self.track_file_size, daemon=True).start()
-
-        if self.progress_var.get() < 100:
-            self.root.after(100, self.update_progress)  # Recursion until completed
+    def update_progress(self, message):
+        """Updates the progress bar according to the inputted message"""
+        for key in NWD_CONVERSION_MAP:
+            if key in message:
+                progress = NWD_CONVERSION_MAP.get(key, self.progress_var.get())
+                self.progress_var.set(progress)
+                break # stop checking when a key match is found
+        
+        # trigger track_file_size during NWD conversion
+        if "Converting" in message:
+            threading.Thread(target=self.track_file_size, daemon=True).start()
     
     def track_file_size(self):
         """Monitors the NWD~ (temp file) size and updates progress dynammically"""
