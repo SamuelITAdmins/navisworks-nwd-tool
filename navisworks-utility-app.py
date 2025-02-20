@@ -1,5 +1,6 @@
 import re
 import sys
+import shutil
 import tkinter as tk
 from tkinter import ttk, messagebox
 import subprocess
@@ -7,6 +8,8 @@ import threading
 import queue
 from pathlib import Path
 import time
+
+# TODO: Clean up code and improve documentation, especially for generating NWD operations. Keep testing for bugs.
 
 # nwf file example: "\\stor-dn-01\projects\Projects\24317_Electra_CO_EPCM\CAD\Piping\Models\_DesignReview\24317-OverallModel.nwf"
 # nwd file example: "\\stor-dn-01\projects\Projects\24317_Electra_CO_EPCM\CAD\Piping\Models\_DesignReview\24317-DO_NOT_OPEN.nwd"
@@ -27,9 +30,15 @@ def get_resource_path(relative_path):
 CONVERT_PS_SCRIPT = get_resource_path("scripts/convertNWFfile.ps1")
 OPEN_PS_SCRIPT = get_resource_path("scripts/openNWfile.ps1")
 
-# TODO: Implement progress bar maps if additional operations are added
-# TODO: Maintain the threading operation with a conversion map during temp file conversion
-# Progress Bar Maps for Operations
+def cleanup_temp_folder():
+    """Deletes the PyInstaller _MEIxxxxx folder on exit."""
+    if getattr(sys, 'frozen', False):  # Only in PyInstaller executable
+        temp_dir = sys._MEIPASS  # PyInstaller extracts files here
+        try:
+            shutil.rmtree(temp_dir)  # Remove the temp directory
+        except PermissionError:
+            print(f"Warning: Could not remove temp dir {temp_dir}")
+
 NWD_CONVERSION_MAP = {
     "Beginning conversion": 10,
     "Opening NWF": 25,
@@ -275,6 +284,9 @@ class NWGUI:
                 pass
 
 if __name__ == "__main__":
-    root = tk.Tk()
-    app = NWGUI(root)
-    root.mainloop()
+    try:
+        root = tk.Tk()
+        app = NWGUI(root)
+        root.mainloop()
+    finally:
+        cleanup_temp_folder()  # Clean up _MEIxxxxx folder
