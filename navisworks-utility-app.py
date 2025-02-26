@@ -92,8 +92,13 @@ class NWGUI:
                 messagebox.showerror("Error", "Project Directory not found!")
                 return
 
-            valid_projects = [(p.name, self.extract_project_num(p.name)) for p in PROJECTS_DIR.iterdir() if p.is_dir() and self.extract_project_num(p.name)]
-            valid_projects.sort(key=lambda x: int(x[1]) if x[1].isdigit() else x[1], reverse=True)
+            valid_projects = []
+            for p in PROJECTS_DIR.iterdir():
+                if p.is_dir():
+                    project_num = self.extract_project_num(p.name)
+                    if project_num:
+                        valid_projects.append((p.name, project_num))
+            valid_projects.sort(key=lambda x: x[1], reverse=True)
 
             if valid_projects:
                 sorted_project_names = [p[0] for p in valid_projects]
