@@ -1,4 +1,5 @@
 import re
+import os
 import sys
 import shutil
 import tkinter as tk
@@ -93,11 +94,12 @@ class NWGUI:
                 return
 
             valid_projects = []
-            for p in PROJECTS_DIR.iterdir():
-                if p.is_dir():
-                    project_num = self.extract_project_num(p.name)
-                    if project_num:
-                        valid_projects.append((p.name, project_num))
+            with os.scandir(PROJECTS_DIR) as projects:
+                for p in projects:
+                    if p.is_dir():
+                        project_num = self.extract_project_num(p.name)
+                        if project_num:
+                            valid_projects.append((p.name, project_num))
             valid_projects.sort(key=lambda x: x[1], reverse=True)
 
             if valid_projects:
