@@ -2,6 +2,7 @@ import re
 import os
 import sys
 import shutil
+import json
 import tkinter as tk
 from tkinter import ttk, messagebox
 import subprocess
@@ -11,6 +12,11 @@ from pathlib import Path
 import time
 
 # TODO: Clean up code and improve documentation, especially for generating NWD operations. Keep testing for bugs.
+# TODO: Change NW_FILES_PATH from a hardcoded path to a directory search algorithm that finds the NW files so that 
+#       it translates to all project file structures
+# TODO: Add a timer when the progress bar says "Opening NWF..." that displays how many minute(s) have elapsed
+# TODO: Filter project list more or archive unused projects in the S drive
+# TODO: Change the threading during project list retrieval to optimize
 
 # nwf file example: "\\stor-dn-01\projects\Projects\24317_Electra_CO_EPCM\CAD\Piping\Models\_DesignReview\24317-OverallModel.nwf"
 # nwd file example: "\\stor-dn-01\projects\Projects\24317_Electra_CO_EPCM\CAD\Piping\Models\_DesignReview\24317-DO_NOT_OPEN.nwd"
@@ -18,6 +24,8 @@ import time
 # Paths (Modify as needed)
 PROJECTS_DIR = Path(r"S:\Projects")  # Directory containing all projects
 NAVISWORKS_TEMP_DIR = Path(r"C:\Navisworks") # Directory containing copied Navisworks files
+CACHE_FILE = Path(Path.home()) / "AppData" / "Local" / "Temp" / "projectsListCache.json"
+CACHE_EXPIRATION = 30 * 24 * 60 * 60 # Cache expires in a month (in seconds)
 NW_FILES_PATH = Path("CAD") / "Piping" / "Models" / "_DesignReview"
 NWF_EXT = ".nwf"
 NWD_EXT = ".nwd"
@@ -67,7 +75,7 @@ class NWGUI:
         self.generate_button.grid(row=2, column=0, padx=10, pady=15)
         ttk.Button(root, text="Open NWD", command=self.open_nwd).grid(row=2, column=1, padx=10, pady=15)
         ttk.Button(root, text="Open NWF", command=self.open_nwf).grid(row=2, column=2, padx=10, pady=15)
-        ttk.Button(root, text="Refresh List", command=self.load_projects).grid(row=3, column=0, padx=10, pady=5)
+        ttk.Button(root, text="Refresh List", command=self.reload_projects).grid(row=3, column=0, padx=10, pady=5)
 
         # Loading message (hidden initially)
         self.loading_label = ttk.Label(root, text="", font=('Segoe UI', 12))
@@ -82,6 +90,13 @@ class NWGUI:
 
         # Queue for powershell script communication
         self.script_queue = queue.Queue()
+    
+    def reload_projects(self):
+        """Delete the cache and load_projects upon refreshing the list."""
+        if CACHE_FILE.exists():
+            CACHE_FILE.unlink()
+
+        self.load_projects()
 
     def load_projects(self):
         """Load project numbers from the directory with a wait message."""
@@ -90,7 +105,12 @@ class NWGUI:
 
         def fetch_projects():
             if not PROJECTS_DIR.exists():
-                messagebox.showerror("Error", "Project Directory not found!")
+                self.show_error("Error", "Project Directory not found!")
+                return
+            
+            cached_projects = self.load_projects_from_cache()
+            if cached_projects:
+                self.root.after(0, lambda: self.update_ui(cached_projects))  # Ensure UI updates happen in the main thread
                 return
 
             valid_projects = []
@@ -100,37 +120,66 @@ class NWGUI:
                         project_num = self.extract_project_num(p.name)
                         if project_num:
                             valid_projects.append((p.name, project_num))
+
             valid_projects.sort(key=lambda x: x[1], reverse=True)
 
-            if valid_projects:
-                sorted_project_names = [p[0] for p in valid_projects]
-                self.project_dropdown["values"] = sorted_project_names
-                self.project_name.set(sorted_project_names[0])
-                self.project_num = (valid_projects[0][1])
+            # Save to cache
+            self.save_projects_to_cache(valid_projects)
 
-            self.loading_label.config(text="")  # Hide loading message after projects are loaded
-            self.enable_gui()
+            # Update UI safely
+            self.root.after(0, lambda: self.update_ui(valid_projects))
 
-        # Run in background thread to not make the GUI unresponsive
+        # Run in background thread to prevent UI freezing
         threading.Thread(target=fetch_projects, daemon=True).start()
+
+    def update_ui(self, valid_projects):
+        """Safely update the UI with the loaded project list."""
+        if valid_projects:
+            sorted_project_names = [p[0] for p in valid_projects]
+            self.project_dropdown["values"] = sorted_project_names
+            self.project_name.set(sorted_project_names[0])
+            self.project_num = valid_projects[0][1]
+
+        self.loading_label.config(text="")  # Hide loading message
+        self.enable_gui()
 
     def get_selected_project(self):
         """Returns the selected project path or None if none selected."""
         project = self.project_name.get()
         if not project:
-            messagebox.showerror("Error", "No project selected!")
+            self.show_error("Error", "No project selected!")
             return None
         
         self.project_num = self.extract_project_num(project)
         if not self.project_num:
-            messagebox.showerror("Error", "Invalid project number structure!")
+            self.show_error("Error", "Invalid project number structure!")
 
         return PROJECTS_DIR / project
     
     def extract_project_num(self, project_name):
-        """Extract the project number from the full project name, discard if the project name does not start with numbers"""
+        """Extract the project number from the full project name, discard if the project name does not start with numbers."""
         prefix = re.split(r'[_ ]', project_name, 1)[0]
         return prefix if re.match(r'^\d[\d-]*$', prefix) else None
+
+    def load_projects_from_cache(self):
+        """Load projects from cache if it's still valid."""
+        if CACHE_FILE.exists():
+            cache_age = time.time() - CACHE_FILE.stat().st_mtime
+            if cache_age < CACHE_EXPIRATION:
+                try:
+                    with open(CACHE_FILE, "r") as f:
+                        return json.load(f)
+                except json.JSONDecodeError:
+                    print("Cache file is corrupted. Ignoring cache.")
+        return None
+    
+    def save_projects_to_cache(self, valid_projects):
+        """Save project list to cache as JSON."""
+        try:
+            with open(CACHE_FILE, "w") as f:
+                json.dump(valid_projects, f)
+        except Exception as e:
+            print(f"Failed to save cache: {e}")
 
     def generate_nwd(self):
         """Generate an NWD file from the NWF file using PowerShell."""
@@ -142,7 +191,7 @@ class NWGUI:
         nwd_file = project_path / NW_FILES_PATH / f"{self.project_num}-DO_NOT_OPEN{NWD_EXT}"
         
         if not CONVERT_PS_SCRIPT.exists():
-            messagebox.showerror("Error", "Conversion PowerShell script not found!")
+            self.show_error("Error", "Conversion PowerShell script not found!")
             return
         
         # Disable the entire GUI until powershell script executes
@@ -192,9 +241,9 @@ class NWGUI:
             self.progress_bar.grid_remove()
 
             if error_message:
-                messagebox.showerror("Error", f"NWD Conversion Error: {error_message}")
+                self.show_error("Error", f"NWD Conversion Error: {error_message}")
             else:
-                messagebox.showinfo("Success", f"Generated NWD for {self.project_num}")
+                self.root.after(0, lambda: messagebox.showinfo("Success", f"Generated NWD for {self.project_num}"))
         
         # Start output processing in a separate thread
         threading.Thread(target=process_output, daemon=True).start()
@@ -239,12 +288,12 @@ class NWGUI:
     def open_file(self, source_path, dest_path):
         """Open a file using PowerShell."""
         if not source_path.exists():
-            messagebox.showerror("Error", f"File not found when opening: {source_path}")
+            self.show_error("Error", f"File not found when opening: {source_path}")
             return
 
         try:
             if not OPEN_PS_SCRIPT.exists():
-                messagebox.showerror("Error", "Open PowerShell script not found!")
+                self.show_error("Error", "Open PowerShell script not found!")
                 return
 
             command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", str(OPEN_PS_SCRIPT), str(source_path), str(dest_path)]
@@ -252,7 +301,7 @@ class NWGUI:
             # messagebox.showinfo("Success", f"Opened {source_path.name} locally as {dest_path}")
         except subprocess.CalledProcessError as e:
             err_msg = e.stdout.strip().split('\n')[-1]
-            messagebox.showerror("Error", f"Failed to open {source_path} locally as {dest_path}: {err_msg}")
+            self.show_error("Error", f"Failed to open {source_path} locally as {dest_path}: {err_msg}")
 
     def open_nwd(self):
         """Open the NWD file."""
@@ -289,6 +338,10 @@ class NWGUI:
                 widget.config(state="normal")
             except tk.TclError:
                 pass
+
+    def show_error(self, title, message):
+        """Safely display an error message."""
+        self.root.after(0, lambda: messagebox.showerror(title, message))
 
 if __name__ == "__main__":
     try:
