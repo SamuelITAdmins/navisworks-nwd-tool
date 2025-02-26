@@ -25,7 +25,7 @@ import time
 PROJECTS_DIR = Path(r"S:\Projects")  # Directory containing all projects
 NAVISWORKS_TEMP_DIR = Path(r"C:\Navisworks") # Directory containing copied Navisworks files
 CACHE_FILE = Path(Path.home()) / "AppData" / "Local" / "Temp" / "projectsListCache.json"
-CACHE_EXPIRATION = 30 * 24 * 60 * 60 # Cache expires in a month (in seconds)
+CACHE_EXPIRATION = 7 * 24 * 60 * 60 # Cache expires in a week (in seconds)
 NW_FILES_PATH = Path("CAD") / "Piping" / "Models" / "_DesignReview"
 NWF_EXT = ".nwf"
 NWD_EXT = ".nwd"
