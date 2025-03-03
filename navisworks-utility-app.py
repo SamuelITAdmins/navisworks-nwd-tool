@@ -36,6 +36,7 @@ def get_resource_path(relative_path):
         return Path(sys._MEIPASS) / relative_path
     return Path(relative_path).resolve() # When running locally (python cmd)
 
+NW_EXE_PATH = get_resource_path("scripts/getNWroamerfile.ps1")
 CONVERT_PS_SCRIPT = get_resource_path("scripts/convertNWFfile.ps1")
 OPEN_PS_SCRIPT = get_resource_path("scripts/openNWfile.ps1")
 
