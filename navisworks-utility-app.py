@@ -36,7 +36,7 @@ def get_resource_path(relative_path):
         return Path(sys._MEIPASS) / relative_path
     return Path(relative_path).resolve() # When running locally (python cmd)
 
-NW_EXE_PATH = get_resource_path("scripts/getNWroamerfile.ps1")
+GET_NW_PATH_SCRIPT = get_resource_path("scripts/getNWroamerfile.ps1")
 CONVERT_PS_SCRIPT = get_resource_path("scripts/convertNWFfile.ps1")
 OPEN_PS_SCRIPT = get_resource_path("scripts/openNWfile.ps1")
 
@@ -61,6 +61,9 @@ class NWGUI:
         self.root = root
         root.iconbitmap(get_resource_path("se.ico"))
         self.root.title("Navisworks Project Manager")
+
+        # Initialize Navisworks Roamer
+        self.roamer_path = self.get_NW_path()
 
         # Dropdown Label
         ttk.Label(root, text="Select Project:").grid(row=0, column=0, padx=0, pady=2)
@@ -91,6 +94,28 @@ class NWGUI:
 
         # Queue for powershell script communication
         self.script_queue = queue.Queue()
+
+    def get_NW_path(self):
+        """Gets the Roamer path for any Navisworks version (Manage, Simulate, Freedom) from the C drive"""
+        try:
+            if not GET_NW_PATH_SCRIPT.exists():
+                self.show_error("Error", "Get NW Roamer script not found!")
+                return
+
+            command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", str(GET_NW_PATH_SCRIPT)]
+            result = subprocess.run(command, capture_output=True, check=True)
+            
+            if result.returncode == 0:
+                nw_path = Path(result.stdout.decode().strip().split('\n')[-1])
+                if nw_path.exists():
+                    return nw_path
+                else:
+                    self.show_error("Error", "Failed to retrieve Navisworks Roamer path.")
+                    self.disable_gui()
+        except subprocess.CalledProcessError as e:
+            err_msg = e.stdout.strip().split('\n')[-1]
+            self.show_error("Error", {err_msg})
+            self.disable_gui()
     
     def reload_projects(self):
         """Delete the cache and load_projects upon refreshing the list."""
@@ -202,7 +227,7 @@ class NWGUI:
         self.disable_gui()
 
         # Run the powershell conversion script
-        command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", str(CONVERT_PS_SCRIPT), str(nwf_file), str(nwd_file)]
+        command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", str(CONVERT_PS_SCRIPT), str(self.roamer_path), str(nwf_file), str(nwd_file)]
         process = subprocess.Popen(
             command, 
             stdout=subprocess.PIPE,
@@ -297,7 +322,7 @@ class NWGUI:
                 self.show_error("Error", "Open PowerShell script not found!")
                 return
 
-            command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", str(OPEN_PS_SCRIPT), str(source_path), str(dest_path)]
+            command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", str(OPEN_PS_SCRIPT), str(self.roamer_path), str(source_path), str(dest_path)]
             subprocess.run(command, check=True, shell=True)
             # messagebox.showinfo("Success", f"Opened {source_path.name} locally as {dest_path}")
         except subprocess.CalledProcessError as e:

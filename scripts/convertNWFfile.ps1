@@ -1,10 +1,8 @@
 param (
+    [string]$navisworksPath,
     [string]$nwfPath,
     [string]$nwdPath
 )
-
-# Ensure Navisworks is installed
-$navisworksPath = "C:\Program Files\Autodesk\Navisworks Manage 2024\Roamer.exe"
 
 # Test pathing
 if (-Not (Test-Path $navisworksPath)) {
