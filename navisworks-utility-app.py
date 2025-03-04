@@ -75,13 +75,22 @@ class NWGUI:
         self.project_dropdown = ttk.Combobox(root, textvariable=self.project_name, width=45, state="readonly")
         self.project_dropdown.grid(row=1, column=0, columnspan=3, padx=5, pady=0)
 
-        # Buttons
+        # Buttons (Always Initialized)
+        self.generate_button = ttk.Button(root, text="Generate NWD", command=self.generate_nwd)
+        self.open_nwf_button = ttk.Button(root, text="Open NWF", command=self.open_nwf)
+        self.open_nwd_button = ttk.Button(root, text="Open NWD", command=self.open_nwd)
+        self.refresh_button = ttk.Button(root, text="Refresh List", command=self.reload_projects)
+
+        # Grid Placement
+        self.open_nwd_button.grid(row=2, column=0, padx=10, pady=15)
         if self.editor:
-            self.generate_button = ttk.Button(root, text="Generate NWD", command=self.generate_nwd)
             self.generate_button.grid(row=2, column=1, padx=10, pady=15)
-            ttk.Button(root, text="Open NWF", command=self.open_nwf).grid(row=2, column=2, padx=10, pady=15)
-        ttk.Button(root, text="Open NWD", command=self.open_nwd).grid(row=2, column=0, padx=10, pady=15)
-        ttk.Button(root, text="Refresh List", command=self.reload_projects).grid(row=3, column=0, padx=10, pady=5)
+            self.open_nwf_button.grid(row=2, column=2, padx=10, pady=15)
+        else:
+            self.generate_button.grid_remove()
+            self.open_nwf_button.grid_remove()
+
+        self.refresh_button.grid(row=3, column=0, padx=10, pady=5)
 
         # Loading message (hidden initially)
         self.loading_label = ttk.Label(root, text="", font=('Segoe UI', 12))
@@ -120,7 +129,6 @@ class NWGUI:
             self.disable_gui()
 
     def check_NW_permission(self, roamer_path):
-        return False
         return not "Freedom" in str(roamer_path)
     
     def reload_projects(self):
