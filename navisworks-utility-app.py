@@ -16,7 +16,7 @@ import time
 #       it translates to all project file structures
 # TODO: Add a timer when the progress bar says "Opening NWF..." that displays how many minute(s) have elapsed
 # TODO: Filter project list more or archive unused projects in the S drive
-# TODO: Change the threading during project list retrieval to optimize
+# TODO: Change the threading type during project list retrieval to optimize
 
 # nwf file example: "\\stor-dn-01\projects\Projects\24317_Electra_CO_EPCM\CAD\Piping\Models\_DesignReview\24317-OverallModel.nwf"
 # nwd file example: "\\stor-dn-01\projects\Projects\24317_Electra_CO_EPCM\CAD\Piping\Models\_DesignReview\24317-DO_NOT_OPEN.nwd"
@@ -62,8 +62,9 @@ class NWGUI:
         root.iconbitmap(get_resource_path("se.ico"))
         self.root.title("Navisworks Project Manager")
 
-        # Initialize Navisworks Roamer
+        # Initialize Navisworks Roamer and check Permissions
         self.roamer_path = self.get_NW_path()
+        self.editor = self.check_NW_permission(self.roamer_path)
 
         # Dropdown Label
         ttk.Label(root, text="Select Project:").grid(row=0, column=0, padx=0, pady=2)
@@ -75,10 +76,11 @@ class NWGUI:
         self.project_dropdown.grid(row=1, column=0, columnspan=3, padx=5, pady=0)
 
         # Buttons
-        self.generate_button = ttk.Button(root, text="Generate NWD", command=self.generate_nwd)
-        self.generate_button.grid(row=2, column=0, padx=10, pady=15)
-        ttk.Button(root, text="Open NWD", command=self.open_nwd).grid(row=2, column=1, padx=10, pady=15)
-        ttk.Button(root, text="Open NWF", command=self.open_nwf).grid(row=2, column=2, padx=10, pady=15)
+        if self.editor:
+            self.generate_button = ttk.Button(root, text="Generate NWD", command=self.generate_nwd)
+            self.generate_button.grid(row=2, column=1, padx=10, pady=15)
+            ttk.Button(root, text="Open NWF", command=self.open_nwf).grid(row=2, column=2, padx=10, pady=15)
+        ttk.Button(root, text="Open NWD", command=self.open_nwd).grid(row=2, column=0, padx=10, pady=15)
         ttk.Button(root, text="Refresh List", command=self.reload_projects).grid(row=3, column=0, padx=10, pady=5)
 
         # Loading message (hidden initially)
@@ -116,6 +118,10 @@ class NWGUI:
             err_msg = e.stdout.strip().split('\n')[-1]
             self.show_error("Error", {err_msg})
             self.disable_gui()
+
+    def check_NW_permission(self, roamer_path):
+        return False
+        return not "Freedom" in str(roamer_path)
     
     def reload_projects(self):
         """Delete the cache and load_projects upon refreshing the list."""
