@@ -75,13 +75,13 @@ class NWGUI:
         self.project_dropdown = ttk.Combobox(root, textvariable=self.project_name, width=45, state="readonly")
         self.project_dropdown.grid(row=1, column=0, columnspan=3, padx=5, pady=0)
 
-        # Buttons (Always Initialized)
+        # Buttons
         self.generate_button = ttk.Button(root, text="Generate NWD", command=self.generate_nwd)
         self.open_nwf_button = ttk.Button(root, text="Open NWF", command=self.open_nwf)
         self.open_nwd_button = ttk.Button(root, text="Open NWD", command=self.open_nwd)
         self.refresh_button = ttk.Button(root, text="Refresh List", command=self.reload_projects)
 
-        # Grid Placement
+        # Grid Placement (based on editor permissions)
         self.open_nwd_button.grid(row=2, column=0, padx=10, pady=15)
         if self.editor:
             self.generate_button.grid(row=2, column=1, padx=10, pady=15)
@@ -89,7 +89,6 @@ class NWGUI:
         else:
             self.generate_button.grid_remove()
             self.open_nwf_button.grid_remove()
-
         self.refresh_button.grid(row=3, column=0, padx=10, pady=5)
 
         # Loading message (hidden initially)
@@ -117,7 +116,7 @@ class NWGUI:
             result = subprocess.run(command, capture_output=True, check=True)
             
             if result.returncode == 0:
-                nw_path = Path(result.stdout.decode().strip().split('\n')[-1])
+                nw_path = Path(result.stdout.decode().strip().split('\n')[-1]) # gets the last return message
                 if nw_path.exists():
                     return nw_path
                 else:
@@ -129,6 +128,7 @@ class NWGUI:
             self.disable_gui()
 
     def check_NW_permission(self, roamer_path):
+        """If the user has Navisworks Freedom, then return false for editing permissions, true otherwise."""
         return not "Freedom" in str(roamer_path)
     
     def reload_projects(self):
@@ -148,11 +148,13 @@ class NWGUI:
                 self.show_error("Error", "Project Directory not found!")
                 return
             
+            # load projects from cache if it is still valid
             cached_projects = self.load_projects_from_cache()
             if cached_projects:
-                self.root.after(0, lambda: self.update_ui(cached_projects))  # Ensure UI updates happen in the main thread
+                self.root.after(0, lambda: self.update_projects(cached_projects))
                 return
 
+            # if cache is invalid, rebuild project list from project directory
             valid_projects = []
             with os.scandir(PROJECTS_DIR) as projects:
                 for p in projects:
@@ -163,16 +165,16 @@ class NWGUI:
 
             valid_projects.sort(key=lambda x: x[1], reverse=True)
 
-            # Save to cache
+            # save to cache
             self.save_projects_to_cache(valid_projects)
 
-            # Update UI safely
-            self.root.after(0, lambda: self.update_ui(valid_projects))
+            # update UI safely
+            self.root.after(0, lambda: self.update_projects(valid_projects))
 
         # Run in background thread to prevent UI freezing
         threading.Thread(target=fetch_projects, daemon=True).start()
 
-    def update_ui(self, valid_projects):
+    def update_projects(self, valid_projects):
         """Safely update the UI with the loaded project list."""
         if valid_projects:
             sorted_project_names = [p[0] for p in valid_projects]
@@ -180,7 +182,8 @@ class NWGUI:
             self.project_name.set(sorted_project_names[0])
             self.project_num = valid_projects[0][1]
 
-        self.loading_label.config(text="")  # Hide loading message
+        # return GUI to normal
+        self.loading_label.config(text="")
         self.enable_gui()
 
     def get_selected_project(self):
@@ -210,7 +213,7 @@ class NWGUI:
                     with open(CACHE_FILE, "r") as f:
                         return json.load(f)
                 except json.JSONDecodeError:
-                    print("Cache file is corrupted. Ignoring cache.")
+                    self.show_error("Error", "Cache file is corrupted. Regenerating project list.")
         return None
     
     def save_projects_to_cache(self, valid_projects):
@@ -219,7 +222,7 @@ class NWGUI:
             with open(CACHE_FILE, "w") as f:
                 json.dump(valid_projects, f)
         except Exception as e:
-            print(f"Failed to save cache: {e}")
+            self.show_error("Error", f"Failed to save cache: {e}")
 
     def generate_nwd(self):
         """Generate an NWD file from the NWF file using PowerShell."""
@@ -381,7 +384,7 @@ class NWGUI:
 
     def show_error(self, title, message):
         """Safely display an error message."""
-        self.root.after(0, lambda: messagebox.showerror(title, message))
+        self.root.after(0, lambda: messagebox.showerror(title, message + " Report error to IT."))
 
 if __name__ == "__main__":
     try:
