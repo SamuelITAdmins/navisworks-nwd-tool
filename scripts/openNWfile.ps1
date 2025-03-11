@@ -1,4 +1,5 @@
 param (
+    [string]$navisworksAppPath,
     [string]$sourcePath,
     [string]$destinationPath
 )
@@ -6,8 +7,6 @@ param (
 # DestinationFile = "C:\Navisworks\#####-OverallModel.nwf"
 # SourceFile = "\\stor-dn-01\projects\Projects\24317_Electra_CO_EPCM\CAD\Piping\Models\_DesignReview\24317-OverallModel.nwf"
 
-# Ensure Navisworks is installed
-$navisworksAppPath = "C:\Program Files\Autodesk\Navisworks Manage 2024\Roamer.exe"
 $navisworksPath = "C:\Navisworks\"
 
 # Test pathing

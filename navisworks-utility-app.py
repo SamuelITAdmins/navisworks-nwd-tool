@@ -16,7 +16,7 @@ import time
 #       it translates to all project file structures
 # TODO: Add a timer when the progress bar says "Opening NWF..." that displays how many minute(s) have elapsed
 # TODO: Filter project list more or archive unused projects in the S drive
-# TODO: Change the threading during project list retrieval to optimize
+# TODO: Change the threading type during project list retrieval to optimize
 
 # nwf file example: "\\stor-dn-01\projects\Projects\24317_Electra_CO_EPCM\CAD\Piping\Models\_DesignReview\24317-OverallModel.nwf"
 # nwd file example: "\\stor-dn-01\projects\Projects\24317_Electra_CO_EPCM\CAD\Piping\Models\_DesignReview\24317-DO_NOT_OPEN.nwd"
@@ -36,6 +36,7 @@ def get_resource_path(relative_path):
         return Path(sys._MEIPASS) / relative_path
     return Path(relative_path).resolve() # When running locally (python cmd)
 
+GET_NW_PATH_SCRIPT = get_resource_path("scripts/getNWroamerfile.ps1")
 CONVERT_PS_SCRIPT = get_resource_path("scripts/convertNWFfile.ps1")
 OPEN_PS_SCRIPT = get_resource_path("scripts/openNWfile.ps1")
 
@@ -61,6 +62,10 @@ class NWGUI:
         root.iconbitmap(get_resource_path("se.ico"))
         self.root.title("Navisworks Project Manager")
 
+        # Initialize Navisworks Roamer and check Permissions
+        self.roamer_path = self.get_NW_path()
+        self.editor = self.check_NW_permission(self.roamer_path)
+
         # Dropdown Label
         ttk.Label(root, text="Select Project:").grid(row=0, column=0, padx=0, pady=2)
 
@@ -72,10 +77,19 @@ class NWGUI:
 
         # Buttons
         self.generate_button = ttk.Button(root, text="Generate NWD", command=self.generate_nwd)
-        self.generate_button.grid(row=2, column=0, padx=10, pady=15)
-        ttk.Button(root, text="Open NWD", command=self.open_nwd).grid(row=2, column=1, padx=10, pady=15)
-        ttk.Button(root, text="Open NWF", command=self.open_nwf).grid(row=2, column=2, padx=10, pady=15)
-        ttk.Button(root, text="Refresh List", command=self.reload_projects).grid(row=3, column=0, padx=10, pady=5)
+        self.open_nwf_button = ttk.Button(root, text="Open NWF", command=self.open_nwf)
+        self.open_nwd_button = ttk.Button(root, text="Open NWD", command=self.open_nwd)
+        self.refresh_button = ttk.Button(root, text="Refresh List", command=self.reload_projects)
+
+        # Grid Placement (based on editor permissions)
+        self.open_nwd_button.grid(row=2, column=0, padx=10, pady=15)
+        if self.editor:
+            self.generate_button.grid(row=2, column=1, padx=10, pady=15)
+            self.open_nwf_button.grid(row=2, column=2, padx=10, pady=15)
+        else:
+            self.generate_button.grid_remove()
+            self.open_nwf_button.grid_remove()
+        self.refresh_button.grid(row=3, column=0, padx=10, pady=5)
 
         # Loading message (hidden initially)
         self.loading_label = ttk.Label(root, text="", font=('Segoe UI', 12))
@@ -90,6 +104,32 @@ class NWGUI:
 
         # Queue for powershell script communication
         self.script_queue = queue.Queue()
+
+    def get_NW_path(self):
+        """Gets the Roamer path for any Navisworks version (Manage, Simulate, Freedom) from the C drive"""
+        try:
+            if not GET_NW_PATH_SCRIPT.exists():
+                self.show_error("Error", "Get NW Roamer script not found!")
+                return
+
+            command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", str(GET_NW_PATH_SCRIPT)]
+            result = subprocess.run(command, capture_output=True, check=True)
+            
+            if result.returncode == 0:
+                nw_path = Path(result.stdout.decode().strip().split('\n')[-1]) # gets the last return message
+                if nw_path.exists():
+                    return nw_path
+                else:
+                    self.show_error("Error", "Failed to retrieve Navisworks Roamer path.")
+                    self.disable_gui()
+        except subprocess.CalledProcessError as e:
+            err_msg = e.stdout.strip().split('\n')[-1]
+            self.show_error("Error", {err_msg})
+            self.disable_gui()
+
+    def check_NW_permission(self, roamer_path):
+        """If the user has Navisworks Freedom, then return false for editing permissions, true otherwise."""
+        return not "Freedom" in str(roamer_path)
     
     def reload_projects(self):
         """Delete the cache and load_projects upon refreshing the list."""
@@ -108,11 +148,13 @@ class NWGUI:
                 self.show_error("Error", "Project Directory not found!")
                 return
             
+            # load projects from cache if it is still valid
             cached_projects = self.load_projects_from_cache()
             if cached_projects:
-                self.root.after(0, lambda: self.update_ui(cached_projects))  # Ensure UI updates happen in the main thread
+                self.root.after(0, lambda: self.update_projects(cached_projects))
                 return
 
+            # if cache is invalid, rebuild project list from project directory
             valid_projects = []
             with os.scandir(PROJECTS_DIR) as projects:
                 for p in projects:
@@ -123,16 +165,16 @@ class NWGUI:
 
             valid_projects.sort(key=lambda x: x[1], reverse=True)
 
-            # Save to cache
+            # save to cache
             self.save_projects_to_cache(valid_projects)
 
-            # Update UI safely
-            self.root.after(0, lambda: self.update_ui(valid_projects))
+            # update UI safely
+            self.root.after(0, lambda: self.update_projects(valid_projects))
 
         # Run in background thread to prevent UI freezing
         threading.Thread(target=fetch_projects, daemon=True).start()
 
-    def update_ui(self, valid_projects):
+    def update_projects(self, valid_projects):
         """Safely update the UI with the loaded project list."""
         if valid_projects:
             sorted_project_names = [p[0] for p in valid_projects]
@@ -140,7 +182,8 @@ class NWGUI:
             self.project_name.set(sorted_project_names[0])
             self.project_num = valid_projects[0][1]
 
-        self.loading_label.config(text="")  # Hide loading message
+        # return GUI to normal
+        self.loading_label.config(text="")
         self.enable_gui()
 
     def get_selected_project(self):
@@ -170,7 +213,7 @@ class NWGUI:
                     with open(CACHE_FILE, "r") as f:
                         return json.load(f)
                 except json.JSONDecodeError:
-                    print("Cache file is corrupted. Ignoring cache.")
+                    self.show_error("Error", "Cache file is corrupted. Regenerating project list.")
         return None
     
     def save_projects_to_cache(self, valid_projects):
@@ -179,7 +222,7 @@ class NWGUI:
             with open(CACHE_FILE, "w") as f:
                 json.dump(valid_projects, f)
         except Exception as e:
-            print(f"Failed to save cache: {e}")
+            self.show_error("Error", f"Failed to save cache: {e}")
 
     def generate_nwd(self):
         """Generate an NWD file from the NWF file using PowerShell."""
@@ -201,7 +244,7 @@ class NWGUI:
         self.disable_gui()
 
         # Run the powershell conversion script
-        command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", str(CONVERT_PS_SCRIPT), str(nwf_file), str(nwd_file)]
+        command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", str(CONVERT_PS_SCRIPT), str(self.roamer_path), str(nwf_file), str(nwd_file)]
         process = subprocess.Popen(
             command, 
             stdout=subprocess.PIPE,
@@ -296,7 +339,7 @@ class NWGUI:
                 self.show_error("Error", "Open PowerShell script not found!")
                 return
 
-            command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", str(OPEN_PS_SCRIPT), str(source_path), str(dest_path)]
+            command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", str(OPEN_PS_SCRIPT), str(self.roamer_path), str(source_path), str(dest_path)]
             subprocess.run(command, check=True, shell=True)
             # messagebox.showinfo("Success", f"Opened {source_path.name} locally as {dest_path}")
         except subprocess.CalledProcessError as e:
@@ -341,7 +384,7 @@ class NWGUI:
 
     def show_error(self, title, message):
         """Safely display an error message."""
-        self.root.after(0, lambda: messagebox.showerror(title, message))
+        self.root.after(0, lambda: messagebox.showerror(title, message + " Report error to IT."))
 
 if __name__ == "__main__":
     try:
