@@ -254,6 +254,7 @@ class NWGUI:
         
         def process_output():
             """Reads PowerShell script output and updates UI accordingly."""
+            final_message = None
             error_message = None
             try:
                 for line in iter(process.stdout.readline, ''):

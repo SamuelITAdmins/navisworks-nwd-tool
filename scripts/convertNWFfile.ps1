@@ -55,6 +55,6 @@ if (Test-Path $tempPath) {
         exit 0
     }
 } else {
-    Write-Output "began convertion. However, the NWF is large and takes awhile to open, so the NWD will be ready to open later."
+    Write-Output "began conversion. However, the NWF is large and takes awhile to open, so the NWD will be ready to open later."
     exit 0
 }
