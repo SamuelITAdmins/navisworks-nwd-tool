@@ -10,7 +10,7 @@ if (-Not (Test-Path $navisworksPath)) {
     exit 1
 }
 if (-Not (Test-Path $nwfPath)) {
-    Write-Output "NWF file not found! Likely not a Navisworks Project."
+    Write-Output "NWF file not found! This project is likely not a Navisworks Project."
     exit 1
 }
 
@@ -21,22 +21,40 @@ Start-Process -filepath $navisworksPath -Argumentlist $arguments
 
 # Stall until the temporary file that does the conversion is created
 Write-Output "Opening NWF..."
-$tempFile = $nwdPath + "~"
+$tempPath = $nwdPath + "~"
 $waiting = 180 # variable: the number of seconds to wait for the temp file to be created
-while (-Not (Test-Path $tempFile) -and ($waiting -gt 0)) {
-    Start-Sleep -Seconds 1
-    $waiting--
+if (Test-Path $nwdPath) {
+    # if the nwd is already made, then wait for a temp file to be created
+    while (-Not (Test-Path $tempPath) -and ($waiting -gt 0)) {
+        Start-Sleep -Seconds 1
+        $waiting--
+    }
+} else {
+    # if this is the first time making the nwd, then wait for it to be created
+    while (-Not (Test-Path $nwdPath) -and ($waiting -gt 0)) {
+        Start-Sleep -Seconds 1
+        $waiting--
+    }
+    $tempPath = $nwdPath
+    $firstConversion = $true
 }
 
-# Stall until the temporary file no longer exists
-if (Test-Path $tempFile) {
+# Stall until convertion is complete
+if (Test-Path $tempPath) {
     Write-Output "Converting..."
-    while (Test-Path $tempFile) {
-        Start-Sleep -Seconds 1
+    # if first nwd creation, then wait 15 seconds and complete script
+    if ($firstConversion) {
+        Start-Sleep -Seconds 15
+        Write-Output "generated for the first time! You can open the NWD, but if it is temporarily corrupted then wait and reopen it in a few minutes."
+    # otherwise, wait for temp file to finish conversion before completion
+    } else {
+        while (Test-Path $tempPath) {
+            Start-Sleep -Seconds 1
+        }
+        Write-Output "generated."
+        exit 0
     }
-    Write-Output "Success: NWD generated"
-    exit 0
 } else {
-    Write-Output "Conversion has begun. The NWF is large and takes awhile to open, so the NWD will be ready to open later."
-    exit 1
+    Write-Output "began convertion. However, the NWF is large and takes awhile to open, so the NWD will be ready to open later."
+    exit 0
 }
