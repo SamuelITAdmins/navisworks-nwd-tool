@@ -11,12 +11,11 @@ import queue
 from pathlib import Path
 import time
 
-# TODO: Clean up code and improve documentation, especially for generating NWD operations. Keep testing for bugs.
 # TODO: Change NW_FILES_PATH from a hardcoded path to a directory search algorithm that finds the NW files so that 
 #       it translates to all project file structures
 # TODO: Add a timer when the progress bar says "Opening NWF..." that displays how many minute(s) have elapsed
-# TODO: Filter project list more or archive unused projects in the S drive
-# TODO: Change the threading type during project list retrieval to optimize
+# TODO: Filter project list down and/or archive unused projects in the S drive
+# TODO: Change the threading type during project list retrieval to optimize fetching
 
 # nwf file example: "\\stor-dn-01\projects\Projects\24317_Electra_CO_EPCM\CAD\Piping\Models\_DesignReview\24317-OverallModel.nwf"
 # nwd file example: "\\stor-dn-01\projects\Projects\24317_Electra_CO_EPCM\CAD\Piping\Models\_DesignReview\24317-DO_NOT_OPEN.nwd"
@@ -109,7 +108,7 @@ class NWGUI:
         """Gets the Roamer path for any Navisworks version (Manage, Simulate, Freedom) from the C drive"""
         try:
             if not GET_NW_PATH_SCRIPT.exists():
-                self.show_error("Error", "Get NW Roamer script not found!")
+                self.show_error("Get NW Roamer script not found!")
                 return
 
             command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", str(GET_NW_PATH_SCRIPT)]
@@ -120,11 +119,11 @@ class NWGUI:
                 if nw_path.exists():
                     return nw_path
                 else:
-                    self.show_error("Error", "Failed to retrieve Navisworks Roamer path.")
+                    self.show_error("Failed to retrieve Navisworks Roamer path.")
                     self.disable_gui()
         except subprocess.CalledProcessError as e:
             err_msg = e.stdout.strip().split('\n')[-1]
-            self.show_error("Error", {err_msg})
+            self.show_error(err_msg)
             self.disable_gui()
 
     def check_NW_permission(self, roamer_path):
@@ -145,7 +144,7 @@ class NWGUI:
 
         def fetch_projects():
             if not PROJECTS_DIR.exists():
-                self.show_error("Error", "Project Directory not found!")
+                self.show_error("Project Directory not found!")
                 return
             
             # load projects from cache if it is still valid
@@ -190,12 +189,12 @@ class NWGUI:
         """Returns the selected project path or None if none selected."""
         project = self.project_name.get()
         if not project:
-            self.show_error("Error", "No project selected!")
+            self.root.after(0, lambda: messagebox.showerror("Error", "No project selected!"))
             return None
         
         self.project_num = self.extract_project_num(project)
         if not self.project_num:
-            self.show_error("Error", "Invalid project number structure!")
+            self.show_error("Invalid project number structure!")
 
         return PROJECTS_DIR / project
     
@@ -213,7 +212,7 @@ class NWGUI:
                     with open(CACHE_FILE, "r") as f:
                         return json.load(f)
                 except json.JSONDecodeError:
-                    self.show_error("Error", "Cache file is corrupted. Regenerating project list.")
+                    self.show_error("Cache file is corrupted. Regenerating project list.")
         return None
     
     def save_projects_to_cache(self, valid_projects):
@@ -222,10 +221,10 @@ class NWGUI:
             with open(CACHE_FILE, "w") as f:
                 json.dump(valid_projects, f)
         except Exception as e:
-            self.show_error("Error", f"Failed to save cache: {e}")
+            self.show_error(f"Failed to save cache: {e}")
 
     def generate_nwd(self):
-        """Generate an NWD file from the NWF file using PowerShell."""
+        """Generate the selected project NWD file from the NWF file using PowerShell."""
         project_path = self.get_selected_project()
         if not project_path:
             return
@@ -234,7 +233,7 @@ class NWGUI:
         nwd_file = project_path / NW_FILES_PATH / f"{self.project_num}-DO_NOT_OPEN{NWD_EXT}"
         
         if not CONVERT_PS_SCRIPT.exists():
-            self.show_error("Error", "Conversion PowerShell script not found!")
+            self.show_error("Conversion PowerShell script not found!")
             return
         
         # Disable the entire GUI until powershell script executes
@@ -251,7 +250,6 @@ class NWGUI:
             stderr=subprocess.PIPE,
             text=True,
             creationflags=subprocess.CREATE_NO_WINDOW,
-            # shell=True
         )
         
         def process_output():
@@ -267,16 +265,19 @@ class NWGUI:
                         self.root.after(0, lambda msg=message: self.root.after(0, self.update_progress(message)))
                 process.wait()
 
+                # if returncode = 1 then error, otherwise returncode = 0 and successful:
                 if process.returncode != 0:
                     error_message = message or "Unknown error occured."
+                else:
+                    final_message = message or f"Generated NWD for {self.project_num}"
                 process.stdout.close()
             except Exception as e:
                 error_message = f"Unexpected error: {str(e)}"
             
             # Schedule GUI updates back on the main thread
-            self.root.after(0, finalize_output, error_message)
+            self.root.after(0, finalize_output, final_message, error_message)
         
-        def finalize_output(error_message):
+        def finalize_output(final_message, error_message):
             """Handles GUI updates after script execution."""
             self.enable_gui()
             self.loading_label.config(text="")
@@ -284,9 +285,9 @@ class NWGUI:
             self.progress_bar.grid_remove()
 
             if error_message:
-                self.show_error("Error", f"NWD Conversion Error: {error_message}")
+                self.root.after(0, lambda: messagebox.showerror("Error",  f"NWD Conversion Error: {error_message}"))
             else:
-                self.root.after(0, lambda: messagebox.showinfo("Success", f"Generated NWD for {self.project_num}"))
+                self.root.after(0, lambda: messagebox.showinfo("Success", f"NWD for {self.project_num} {final_message}"))
         
         # Start output processing in a separate thread
         threading.Thread(target=process_output, daemon=True).start()
@@ -312,6 +313,7 @@ class NWGUI:
         final_file = project_path / NW_FILES_PATH / f"{self.project_num}-DO_NOT_OPEN{NWD_EXT}"
         temp_file = project_path / NW_FILES_PATH / f"{self.project_num}-DO_NOT_OPEN{NWD_EXT}~"
 
+        # if this is the first time the nwd is generated, then the temp file will not exist, thus exit
         if not temp_file.exists() or not final_file.exists():
             return
 
@@ -331,20 +333,19 @@ class NWGUI:
     def open_file(self, source_path, dest_path):
         """Open a file using PowerShell."""
         if not source_path.exists():
-            self.show_error("Error", f"File not found when opening: {source_path}")
+            self.root.after(0, lambda: messagebox.showerror("Error", f"File to open not found: {source_path}\nEither generate the file, or the project ({self.project_name.get()}) may not be a Navisworks project."))
             return
 
         try:
             if not OPEN_PS_SCRIPT.exists():
-                self.show_error("Error", "Open PowerShell script not found!")
+                self.show_error("Open PowerShell script not found!")
                 return
 
             command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", str(OPEN_PS_SCRIPT), str(self.roamer_path), str(source_path), str(dest_path)]
-            subprocess.run(command, check=True, shell=True)
-            # messagebox.showinfo("Success", f"Opened {source_path.name} locally as {dest_path}")
+            subprocess.run(command, check=True)
         except subprocess.CalledProcessError as e:
             err_msg = e.stdout.strip().split('\n')[-1]
-            self.show_error("Error", f"Failed to open {source_path} locally as {dest_path}: {err_msg}")
+            self.show_error(f"Failed to open {source_path} locally as {dest_path}: {err_msg}")
 
     def open_nwd(self):
         """Open the NWD file."""
@@ -382,9 +383,9 @@ class NWGUI:
             except tk.TclError:
                 pass
 
-    def show_error(self, title, message):
-        """Safely display an error message."""
-        self.root.after(0, lambda: messagebox.showerror(title, message + " Report error to IT."))
+    def show_error(self, message):
+        """Safely display an error message and prompt the user to alert the IT team."""
+        self.root.after(0, lambda: messagebox.showerror("Error", message + " Report this error to IT."))
 
 if __name__ == "__main__":
     try:
