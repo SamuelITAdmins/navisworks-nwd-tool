@@ -23,20 +23,18 @@ Start-Process -filepath $navisworksPath -Argumentlist $arguments
 Write-Output "Opening NWF..."
 $tempPath = $nwdPath + "~"
 $waiting = 180 # variable: the number of seconds to wait for the temp file to be created
-if (Test-Path $nwdPath) {
-    # if the nwd is already made, then wait for a temp file to be created
-    while (-Not (Test-Path $tempPath) -and ($waiting -gt 0)) {
-        Start-Sleep -Seconds 1
-        $waiting--
-    }
-} else {
-    # if this is the first time making the nwd, then wait for it to be created
-    while (-Not (Test-Path $nwdPath) -and ($waiting -gt 0)) {
-        Start-Sleep -Seconds 1
-        $waiting--
-    }
+
+# If this is the first time making the nwd, then change the temp file path
+if (-Not (Test-Path $nwdPath)) {
     $tempPath = $nwdPath
     $firstConversion = $true
+}
+
+# wait for NWF to open and the temp file to be generated
+while (-Not (Test-Path $tempPath) -and ($waiting -gt 0)) {
+    Start-Sleep -Seconds 1
+    $waiting--
+    Write-Output "Opening NWF: $waiting"
 }
 
 # Stall until convertion is complete
