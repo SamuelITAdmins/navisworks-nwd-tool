@@ -44,6 +44,7 @@ if (Test-Path $tempPath) {
     if ($firstConversion) {
         Start-Sleep -Seconds 15
         Write-Output "generated for the first time! You can open the NWD, but if it is temporarily corrupted then wait and reopen it in a few minutes."
+        exit 0
     # otherwise, wait for temp file to finish conversion before completion
     } else {
         while (Test-Path $tempPath) {
