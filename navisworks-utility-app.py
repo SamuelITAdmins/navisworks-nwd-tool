@@ -112,7 +112,7 @@ class NWGUI:
                 return
 
             command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", str(GET_NW_PATH_SCRIPT)]
-            result = subprocess.run(command, capture_output=True, check=True)
+            result = subprocess.run(command, capture_output=True, check=True, creationflags=subprocess.CREATE_NO_WINDOW)
             
             if result.returncode == 0:
                 nw_path = Path(result.stdout.decode().strip().split('\n')[-1]) # gets the last return message
@@ -343,7 +343,7 @@ class NWGUI:
                 return
 
             command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", str(OPEN_PS_SCRIPT), str(self.roamer_path), str(source_path), str(dest_path)]
-            subprocess.run(command, check=True)
+            subprocess.run(command, capture_output=True, check=True, creationflags=subprocess.CREATE_NO_WINDOW)
         except subprocess.CalledProcessError as e:
             err_msg = e.stdout.strip().split('\n')[-1]
             self.show_error(f"Failed to open {source_path} locally as {dest_path}: {err_msg}")
