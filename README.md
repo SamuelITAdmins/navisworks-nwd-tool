@@ -10,7 +10,7 @@ This application is designed to help users generate NWD files and open NWD/NWF f
 ## Usage (For Users)
 
 ### Running the Application
-1. **Open the Executable:** Run the `navisworks-utility-app.exe` file.
+1. **Open the Executable:** Run the `navisworks-utility-app.exe` file (Location: S:\SE_CAD\Programming\navisworks-utility-app.py).
 2. **Select a Project:** Use the dropdown menu to choose the desired project.
 3. **Available Actions:**
    - **Open NWD:** Opens the project NWD file locally.
